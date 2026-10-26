@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>در حال انتقال... | سیانای موبایل</title>
+    <script>
+      (function () {
+        var path = window.location.pathname;
+        var search = window.location.search || '';
+        var hash = window.location.hash || '';
+
+        // Extract segments from path
+        var segments = path.split('/').filter(Boolean);
+
+        // Check if on GitHub Pages (e.g., username.github.io/repo-name)
+        if (window.location.hostname.endsWith('github.io') && segments.length > 0) {
+          var repo = segments[0];
+          var route = '/' + segments.slice(1).join('/');
+          window.location.replace('/' + repo + '/#' + route + search + hash);
+        } else {
+          var targetRoute = '/' + segments.join('/');
+          window.location.replace('/#' + targetRoute + search + hash);
+        }
+      })();
+    </script>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        margin: 0;
+        background-color: #f8fafc;
+        color: #334155;
+        text-align: center;
+      }
+      .loader {
+        padding: 2rem;
+        background: white;
+        border-radius: 1rem;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="loader">
+      <p style="margin: 0; font-size: 1.1rem; font-weight: 500;">در حال انتقال به صفحه مورد نظر...</p>
+    </div>
+  </body>
+</html>
