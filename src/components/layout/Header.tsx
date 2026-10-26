@@ -57,12 +57,19 @@ export const Header: React.FC = () => {
               <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
               ارسال رایگان برای خریدهای بالای ۱ میلیون تومان به سراسر ایران
             </span>
-            <div className="hidden md:flex items-center gap-6 text-slate-300">
-              <span className="flex items-center gap-1">
+            <div className="flex items-center gap-4 sm:gap-6 text-slate-300">
+              <Link
+                to="/admin/dashboard"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-600/30 hover:bg-blue-600 text-blue-200 hover:text-white transition-all text-xs font-semibold"
+              >
+                <span className="material-symbols-outlined text-[16px]">admin_panel_settings</span>
+                <span>پنل مدیریت و انبارداری</span>
+              </Link>
+              <span className="hidden md:flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
                 ضمانت اصالت ۱۰۰٪ تمامی کالاها
               </span>
-              <span className="flex items-center gap-1" dir="ltr">
+              <span className="hidden md:flex items-center gap-1" dir="ltr">
                 <Phone className="w-3.5 h-3.5 text-blue-400" />
                 ۰۲۱-۸۸۸۸۹۹۹۹
               </span>
