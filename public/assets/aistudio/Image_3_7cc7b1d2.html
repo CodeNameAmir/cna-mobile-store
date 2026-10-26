@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="fa"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><title>سی‌ان‌ای موبایل | CNA Mobile Store</title><link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn,+system-ui,+Tahoma,+sans-serif:wght@100..900&display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "tertiary-fixed-dim": "#ffb690",
+          "surface": "#f8f9ff",
+          "on-error": "#ffffff",
+          "tertiary-container": "#b54e00",
+          "on-surface-variant": "#434655",
+          "primary-fixed": "#dbe1ff",
+          "surface-container-low": "#eff4ff",
+          "surface-container-high": "#dce9ff",
+          "on-tertiary-fixed": "#341100",
+          "surface-variant": "#d3e4fe",
+          "surface-bright": "#f8f9ff",
+          "on-tertiary-fixed-variant": "#783200",
+          "on-tertiary": "#ffffff",
+          "secondary-fixed": "#dae2fd",
+          "on-error-container": "#93000a",
+          "on-secondary-fixed-variant": "#3f465c",
+          "on-surface": "#0b1c30",
+          "on-primary-container": "#eeefff",
+          "inverse-on-surface": "#eaf1ff",
+          "secondary": "#565e74",
+          "primary": "#004ac6",
+          "surface-container-highest": "#d3e4fe",
+          "inverse-surface": "#213145",
+          "error": "#ba1a1a",
+          "primary-container": "#2563eb",
+          "on-primary-fixed": "#00174b",
+          "inverse-primary": "#b4c5ff",
+          "surface-container": "#e5eeff",
+          "on-secondary": "#ffffff",
+          "on-primary-fixed-variant": "#003ea8",
+          "tertiary-fixed": "#ffdbca",
+          "surface-dim": "#cbdbf5",
+          "primary-fixed-dim": "#b4c5ff",
+          "surface-tint": "#0053db",
+          "secondary-container": "#dae2fd",
+          "on-secondary-fixed": "#131b2e",
+          "outline-variant": "#c3c6d7",
+          "tertiary": "#8e3c00",
+          "error-container": "#ffdad6",
+          "on-primary": "#ffffff",
+          "on-tertiary-container": "#ffece5",
+          "outline": "#737686",
+          "on-background": "#0b1c30",
+          "on-secondary-container": "#5c647a",
+          "secondary-fixed-dim": "#bec6e0",
+          "surface-container-lowest": "#ffffff",
+          "background": "#f8f9ff"
+        },
+        "borderRadius": {
+          "DEFAULT": "0.25rem",
+          "lg": "0.5rem",
+          "xl": "0.75rem",
+          "full": "9999px"
+        },
+        "spacing": {
+          "space-md": "1rem",
+          "space-sm": "0.5rem",
+          "gutter-sm": "1rem",
+          "gutter": "1.5rem",
+          "margin-mobile": "1rem",
+          "space-xl": "2.5rem",
+          "space-lg": "1.5rem",
+          "space-xs": "0.25rem",
+          "margin": "2rem"
+        },
+        "fontFamily": {
+          "headline-md": ["\"Vazirmatn, system-ui, Tahoma, sans-serif\""],
+          "label-md": ["\"Vazirmatn, system-ui, Tahoma, sans-serif\""],
+          "body-md": ["\"Vazirmatn, system-ui, Tahoma, sans-serif\""],
+          "label-lg": ["\"Vazirmatn, system-ui, Tahoma, sans-serif\""],
+          "headline-xl-mobile": ["\"Vazirmatn, system-ui, Tahoma, sans-serif\""],
+          "headline-lg": ["\"Vazirmatn, system-ui, Tahoma, sans-serif\""],
+          "headline-sm": ["\"Vazirmatn, system-ui, Tahoma, sans-serif\""],
+          "label-sm": ["\"Vazirmatn, system-ui, Tahoma, sans-serif\""],
+          "body-sm": ["\"Vazirmatn, system-ui, Tahoma, sans-serif\""],
+          "headline-xl": ["\"Vazirmatn, system-ui, Tahoma, sans-serif\""],
+          "body-lg": ["\"Vazirmatn, system-ui, Tahoma, sans-serif\""],
+          "headline-lg-mobile": ["\"Vazirmatn, system-ui, Tahoma, sans-serif\""],
+          "price-unit": ["\"Vazirmatn, system-ui, Tahoma, sans-serif\""],
+          "price-display": ["\"Vazirmatn, system-ui, Tahoma, sans-serif\""],
+          "body": ["\"Vazirmatn, system-ui, Tahoma, sans-serif\""]
+        },
+        "fontSize": {
+          "headline-md": ["20px", {"lineHeight": "32px", "fontWeight": "700"}],
+          "label-md": ["12px", {"lineHeight": "18px", "fontWeight": "600"}],
+          "body-md": ["14px", {"lineHeight": "24px", "fontWeight": "400"}],
+          "label-lg": ["14px", {"lineHeight": "20px", "fontWeight": "600"}],
+          "headline-xl-mobile": ["26px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "800"}],
+          "headline-lg": ["28px", {"lineHeight": "44px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+          "headline-sm": ["18px", {"lineHeight": "28px", "fontWeight": "600"}],
+          "label-sm": ["11px", {"lineHeight": "16px", "fontWeight": "500"}],
+          "body-sm": ["12px", {"lineHeight": "20px", "fontWeight": "400"}],
+          "headline-xl": ["36px", {"lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+          "body-lg": ["16px", {"lineHeight": "28px", "fontWeight": "400"}],
+          "headline-lg-mobile": ["22px", {"lineHeight": "34px", "letterSpacing": "0", "fontWeight": "700"}],
+          "price-unit": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+          "price-display": ["22px", {"lineHeight": "30px", "fontWeight": "800"}]
+        }
+      }
+    }
+  };</script></head><body class="bg-background font-body-md text-body-md text-on-surface antialiased"><header class="fixed top-0 right-0 left-0 z-50 bg-surface-container-lowest/95 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="bg-inverse-surface text-inverse-on-surface"><div class="max-w-7xl mx-auto px-6 lg:px-12 h-9 flex items-center justify-between font-label-sm text-label-sm"><span>ارسال رایگان برای خریدهای بالای ۱ میلیون تومان به سراسر ایران</span><div class="hidden md:flex items-center gap-6"><span>ضمانت اصالت ۱۰۰٪ تمامی کالاها</span><span>پشتیبانی: ۰۲۱-۸۸۸۸۹۹۹۹</span></div></div></div><div class="max-w-7xl mx-auto px-6 lg:px-12 py-3.5"><div class="flex items-center justify-between gap-6"><div class="flex items-center gap-4"><a class="flex items-center gap-3" data-path="home" href="#"><img alt="CNA Mobile Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNpElgPvxQWS5cLzvXKBBkvHUBkq1cpO6nL0AHHxkrMVeb-scS6B0zkLYvoaBj6V81iKkjiNeUhShco1LVp5HgHQh5MPdzFvA1RitQsZS8AlFsDFLCgJ1sTL3llqjJbVRFQAhZCXZV1tDDbsA2F6npJjXU2uHNjzUGBQxQspyWlcONKszCfIsYRA8rVUkN0Pe8N7zGbjlgRyRmg7EzaTSZPiXfBm5hI88dxwAsKnk5Ubl6Wu_cYx8Nqg"/><div class="flex flex-col"><span class="font-headline-sm text-headline-sm text-on-surface">سی‌ان‌ای موبایل</span><span class="font-label-sm text-label-sm text-on-surface-variant">CNA Mobile & Accessories</span></div></a></div><div class="flex-1 max-w-2xl mx-4"><div class="relative flex items-center"><input class="w-full h-11 pr-11 pl-4 rounded-xl bg-surface-container-low text-on-surface font-body-sm text-body-sm focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary transition-all duration-150" placeholder="جستجوی گوشی، ساعت هوشمند، کاور، شارژر و..." type="text"/><span class="material-symbols-outlined absolute right-3.5 text-on-surface-variant pointer-events-none text-xl">search</span></div></div><div class="flex items-center gap-3"><a class="flex items-center gap-2 h-11 px-4 rounded-xl bg-surface-container hover:bg-surface-container-high transition-colors text-on-surface" data-path="login" href="#"><span class="material-symbols-outlined text-lg">person</span><span class="font-label-lg text-label-lg hidden sm:inline">ورود / ثبت‌نام</span></a><a class="flex items-center gap-3 h-11 px-4 rounded-xl bg-primary text-on-primary hover:bg-primary-container transition-colors" data-path="cart" href="#"><div class="relative flex items-center"><span class="material-symbols-outlined text-xl">shopping_bag</span><span class="absolute -top-1.5 -right-2 bg-tertiary-container text-on-tertiary rounded-full w-4 h-4 flex items-center justify-center font-label-sm text-[10px]">۲</span></div><span class="font-label-lg text-label-lg hidden md:inline">سبد خرید</span><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></a></div></div></div><div class="bg-surface-container-low/70"><div class="max-w-7xl mx-auto px-6 lg:px-12 h-11 flex items-center"><nav class="flex items-center gap-7 overflow-x-auto" data-active-classes="text-primary font-label-lg font-bold"><a class="text-on-surface-variant hover:text-on-surface font-label-md text-label-md whitespace-nowrap transition-colors" data-path="home" href="#">صفحه اصلی</a><a aria-current="page" class="whitespace-nowrap transition-colors text-primary font-label-lg font-bold" data-path="phones-catalog" href="#">گوشی موبایل</a><a class="text-on-surface-variant hover:text-on-surface font-label-md text-label-md whitespace-nowrap transition-colors" data-path="tablets" href="#">تبلت</a><a class="text-on-surface-variant hover:text-on-surface font-label-md text-label-md whitespace-nowrap transition-colors" data-path="smartwatches" href="#">ساعت و بند هوشمند</a><a class="text-on-surface-variant hover:text-on-surface font-label-md text-label-md whitespace-nowrap transition-colors" data-path="audio" href="#">هندزفری و هدفون</a><a class="text-on-surface-variant hover:text-on-surface font-label-md text-label-md whitespace-nowrap transition-colors" data-path="power-charger" href="#">پاوربانک و شارژر</a><a class="text-on-surface-variant hover:text-on-surface font-label-md text-label-md whitespace-nowrap transition-colors" data-path="cases-screen" href="#">قاب و محافظ صفحه</a><a class="text-on-surface-variant hover:text-on-surface font-label-md text-label-md whitespace-nowrap transition-colors" data-path="gaming-accessories" href="#">لوازم گیمینگ</a><a class="text-on-surface-variant hover:text-on-surface font-label-md text-label-md whitespace-nowrap transition-colors flex items-center gap-1 text-tertiary-container font-semibold" data-path="special-offers" href="#">پیشنهادات طلایی</a></nav></div></div></header><main class="w-full pt-36 bg-surface min-h-[calc(100vh-200px)]"><div class="flex flex-col w-full">
+<!-- Breadcrumb & Top Announcement -->
+<section class="max-w-7xl mx-auto px-6 lg:px-12 w-full pt-4 pb-2">
+<div class="flex flex-wrap items-center justify-between gap-4 py-2">
+<nav class="flex items-center gap-2 text-on-surface-variant font-body-sm text-body-sm">
+<a class="hover:text-primary transition-colors flex items-center gap-1" data-path="home" href="#">
+<span class="material-symbols-outlined text-base">home</span>
+<span>خانه</span>
+</a>
+<span class="material-symbols-outlined text-sm text-outline-variant">chevron_left</span>
+<a class="hover:text-primary transition-colors" data-path="phones-catalog" href="#">گوشی موبایل</a>
+<span class="material-symbols-outlined text-sm text-outline-variant">chevron_left</span>
+<span class="text-on-surface font-label-md text-label-md">همه گوشی‌های هوشمند</span>
+</nav>
+<div class="flex items-center gap-3">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container text-on-secondary-fixed font-label-sm text-label-sm">
+<span class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span>
+<span>قیمت‌ها بر اساس نرخ روز ارز به‌روزرسانی شدند</span>
+</span>
+</div>
+</div>
+</section>
+<!-- Editorial Top Banner Card (Subtle Canvas) -->
+<section class="max-w-7xl mx-auto px-6 lg:px-12 w-full mb-8">
+<div class="relative overflow-hidden rounded-2xl bg-surface-container-low p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+<div class="space-y-2 z-10 max-w-xl">
+<div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-surface-container-lowest text-primary font-label-md text-label-md shadow-sm">
+<span class="material-symbols-outlined text-base text-primary">verified_user</span>
+<span>تضمین رجیستری قانونی و گارانتی رسمی ۱۸ ماهه</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface">بازار تخصصی پرچمداران و میان‌رده‌های موبایل</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">انتخاب هوشمندانه از بین ۱۲۴ مدل متنوع اپل، سامسونگ و شیائومی با پلمپ اصلی شرکتی و ارسال فوق‌سریع به سراسر ایران</p>
+</div>
+<div class="flex items-center gap-4 z-10">
+<div class="flex flex-col items-center bg-surface-container-lowest px-4 py-3 rounded-xl shadow-sm min-w-[100px]">
+<span class="font-price-display text-price-display text-primary">۱۲۴</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">مدل در دسترس</span>
+</div>
+<div class="flex flex-col items-center bg-surface-container-lowest px-4 py-3 rounded-xl shadow-sm min-w-[100px]">
+<span class="font-price-display text-price-display text-tertiary-container">۱۰۰٪</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">اصالت کالا</span>
+</div>
+<div class="flex flex-col items-center bg-surface-container-lowest px-4 py-3 rounded-xl shadow-sm min-w-[100px]">
+<span class="font-price-display text-price-display text-on-surface">۲۴</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">ساعته ارسال</span>
+</div>
+</div>
+<div class="absolute -left-12 -bottom-12 w-64 h-64 rounded-full bg-primary-fixed/30 blur-3xl pointer-events-none"></div>
+</div>
+</section>
+<!-- Main Body Catalog Layout: Right Sidebar (Filters) + Left Catalog Grid (RTL) -->
+<section class="max-w-7xl mx-auto px-6 lg:px-12 w-full pb-16">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+<!-- Right Column: Interactive Filters Sidebar (lg:col-span-3) -->
+<aside class="lg:col-span-3 space-y-5">
+<div class="bg-surface-container-lowest rounded-2xl p-5 shadow-sm space-y-6">
+<!-- Filters Header -->
+<div class="flex items-center justify-between pb-4">
+<div class="flex items-center gap-2 text-on-surface">
+<span class="material-symbols-outlined text-primary text-xl">tune</span>
+<span class="font-headline-sm text-headline-sm">فیلترهای پیشرفته</span>
+</div>
+<button class="text-error hover:text-error-container font-label-sm text-label-sm transition-colors" id="reset-filters-btn" type="button">
+              حذف همه
+            </button>
+</div>
+<!-- Quick Switches Group -->
+<div class="space-y-3.5 bg-surface-container-low p-3.5 rounded-xl">
+<!-- Toggle 1 -->
+<label class="flex items-center justify-between cursor-pointer select-none">
+<span class="font-label-md text-label-md text-on-surface">فقط کالاهای موجود</span>
+<div class="relative inline-block w-11 h-6 transition duration-200 ease-linear">
+<input checked="" class="peer sr-only" id="filter-in-stock" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:bg-primary transition-colors"></div>
+<div class="absolute right-1 top-1 bg-surface-container-lowest w-4 h-4 rounded-full transition-transform peer-checked:-translate-x-5"></div>
+</div>
+</label>
+<!-- Toggle 2 -->
+<label class="flex items-center justify-between cursor-pointer select-none">
+<span class="font-label-md text-label-md text-on-surface">فقط تخفیف‌دارها</span>
+<div class="relative inline-block w-11 h-6 transition duration-200 ease-linear">
+<input checked="" class="peer sr-only" id="filter-discounted" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:bg-tertiary-container transition-colors"></div>
+<div class="absolute right-1 top-1 bg-surface-container-lowest w-4 h-4 rounded-full transition-transform peer-checked:-translate-x-5"></div>
+</div>
+</label>
+<!-- Toggle 3 -->
+<label class="flex items-center justify-between cursor-pointer select-none">
+<span class="font-label-md text-label-md text-on-surface">ارسال فوری امروز (تهران)</span>
+<div class="relative inline-block w-11 h-6 transition duration-200 ease-linear">
+<input class="peer sr-only" id="filter-express" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:bg-primary transition-colors"></div>
+<div class="absolute right-1 top-1 bg-surface-container-lowest w-4 h-4 rounded-full transition-transform peer-checked:-translate-x-5"></div>
+</div>
+</label>
+</div>
+<!-- Brand Filter -->
+<div class="space-y-3">
+<div class="flex items-center justify-between">
+<span class="font-headline-sm text-headline-sm text-on-surface">برند سازنده</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">انتخاب چندگانه</span>
+</div>
+<!-- Brand Search Mini Input -->
+<div class="relative flex items-center">
+<input class="w-full h-9 pr-9 pl-3 rounded-lg bg-surface-container-low text-on-surface font-body-sm text-body-sm focus:outline-none focus:bg-surface-container-lowest" id="brand-search" placeholder="جستجوی نام برند..." type="text"/>
+<span class="material-symbols-outlined absolute right-2.5 text-on-surface-variant text-base pointer-events-none">search</span>
+</div>
+<div class="space-y-2 pt-1 max-h-48 overflow-y-auto">
+<label class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-container cursor-pointer transition-colors">
+<div class="flex items-center gap-2.5">
+<input checked="" class="w-4 h-4 rounded text-primary focus:ring-0" type="checkbox"/>
+<span class="font-body-md text-body-md text-on-surface">اپل (Apple)</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">۳۲</span>
+</label>
+<label class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-container cursor-pointer transition-colors">
+<div class="flex items-center gap-2.5">
+<input checked="" class="w-4 h-4 rounded text-primary focus:ring-0" type="checkbox"/>
+<span class="font-body-md text-body-md text-on-surface">سامسونگ (Samsung)</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">۴۶</span>
+</label>
+<label class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-container cursor-pointer transition-colors">
+<div class="flex items-center gap-2.5">
+<input class="w-4 h-4 rounded text-primary focus:ring-0" type="checkbox"/>
+<span class="font-body-md text-body-md text-on-surface">شیائومی (Xiaomi)</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">۲۸</span>
+</label>
+<label class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-container cursor-pointer transition-colors">
+<div class="flex items-center gap-2.5">
+<input class="w-4 h-4 rounded text-primary focus:ring-0" type="checkbox"/>
+<span class="font-body-md text-body-md text-on-surface">آنر (Honor)</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">۱۲</span>
+</label>
+<label class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-container cursor-pointer transition-colors">
+<div class="flex items-center gap-2.5">
+<input class="w-4 h-4 rounded text-primary focus:ring-0" type="checkbox"/>
+<span class="font-body-md text-body-md text-on-surface">موتورولا (Motorola)</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">۶</span>
+</label>
+</div>
+</div>
+<!-- Price Range Slider Section -->
+<div class="space-y-3.5 pt-2">
+<div class="flex items-center justify-between">
+<span class="font-headline-sm text-headline-sm text-on-surface">محدوده قیمت</span>
+<span class="font-label-sm text-label-sm text-primary font-semibold">تومان</span>
+</div>
+<!-- Visual Slider Representation -->
+<div class="relative py-2">
+<div class="h-2 rounded-full bg-surface-container">
+<div class="h-2 bg-primary rounded-full absolute right-[10%] left-[25%]"></div>
+</div>
+<input class="absolute inset-0 w-full opacity-0 cursor-pointer pointer-events-auto" max="150" min="10" type="range" value="25"/>
+</div>
+<div class="grid grid-cols-2 gap-2 text-right">
+<div class="p-2.5 rounded-lg bg-surface-container-low">
+<span class="font-label-sm text-label-sm text-on-surface-variant block">از قیمت:</span>
+<span class="font-label-lg text-label-lg text-on-surface font-bold">۱۴,۵۰۰,۰۰۰</span>
+</div>
+<div class="p-2.5 rounded-lg bg-surface-container-low">
+<span class="font-label-sm text-label-sm text-on-surface-variant block">تا قیمت:</span>
+<span class="font-label-lg text-label-lg text-on-surface font-bold">۹۸,۰۰۰,۰۰۰</span>
+</div>
+</div>
+</div>
+<!-- Storage Filter (Chips) -->
+<div class="space-y-3 pt-2">
+<span class="font-headline-sm text-headline-sm text-on-surface block">حافظه داخلی</span>
+<div class="grid grid-cols-2 gap-2">
+<button class="py-2 px-3 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container text-center font-label-md text-label-md transition-colors" type="button">
+                ۱۲۸ گیگابایت
+              </button>
+<button class="py-2 px-3 rounded-lg bg-inverse-surface text-inverse-on-surface text-center font-label-md text-label-md font-bold shadow-sm" type="button">
+                ۲۵۶ گیگابایت ✓
+              </button>
+<button class="py-2 px-3 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container text-center font-label-md text-label-md transition-colors" type="button">
+                ۵۱۲ گیگابایت
+              </button>
+<button class="py-2 px-3 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container text-center font-label-md text-label-md transition-colors" type="button">
+                ۱ ترابایت
+              </button>
+</div>
+</div>
+<!-- RAM Filter -->
+<div class="space-y-3 pt-2">
+<span class="font-headline-sm text-headline-sm text-on-surface block">حافظه رم (RAM)</span>
+<div class="flex flex-wrap gap-2">
+<span class="px-3 py-1.5 rounded-lg bg-surface-container-low text-on-surface text-center font-label-md text-label-md cursor-pointer hover:bg-surface-container">۶ گیگ</span>
+<span class="px-3 py-1.5 rounded-lg bg-primary text-on-primary text-center font-label-md text-label-md cursor-pointer font-bold shadow-sm">۸ گیگ</span>
+<span class="px-3 py-1.5 rounded-lg bg-surface-container-low text-on-surface text-center font-label-md text-label-md cursor-pointer hover:bg-surface-container">۱۲ گیگ</span>
+<span class="px-3 py-1.5 rounded-lg bg-surface-container-low text-on-surface text-center font-label-md text-label-md cursor-pointer hover:bg-surface-container">۱۶ گیگ</span>
+</div>
+</div>
+<!-- Color Palette Filter -->
+<div class="space-y-3 pt-2">
+<span class="font-headline-sm text-headline-sm text-on-surface block">رنگ بدنه</span>
+<div class="flex items-center gap-3">
+<!-- Titanium Natural -->
+<button class="w-8 h-8 rounded-full bg-[#9c9589] shadow-sm flex items-center justify-center text-white scale-110" title="تیتانیوم طبیعی">
+<span class="material-symbols-outlined text-sm">check</span>
+</button>
+<!-- Midnight Blue -->
+<button class="w-8 h-8 rounded-full bg-[#1e293b] shadow-sm hover:scale-105 transition-transform" title="آبی تیره"></button>
+<!-- Starlight / Silver -->
+<button class="w-8 h-8 rounded-full bg-[#e2e8f0] shadow-sm hover:scale-105 transition-transform" title="نقره‌ای مهتابی"></button>
+<!-- Deep Purple -->
+<button class="w-8 h-8 rounded-full bg-[#581c87] shadow-sm hover:scale-105 transition-transform" title="بنفش رویایی"></button>
+<!-- Forest Emerald -->
+<button class="w-8 h-8 rounded-full bg-[#064e3b] shadow-sm hover:scale-105 transition-transform" title="سبز زمردی"></button>
+<!-- Desert Titanium Gold -->
+<button class="w-8 h-8 rounded-full bg-[#d4af37] shadow-sm hover:scale-105 transition-transform" title="طلایی بیابانی"></button>
+</div>
+</div>
+<!-- Action Buttons -->
+<div class="pt-4 space-y-2">
+<button class="w-full h-11 rounded-xl bg-primary text-on-primary font-label-lg text-label-lg hover:bg-primary-container shadow-sm transition-colors flex items-center justify-center gap-2" type="button">
+<span class="material-symbols-outlined text-lg">check_circle</span>
+<span>اعمال فیلترهای انتخابی</span>
+</button>
+<button class="w-full h-10 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md transition-colors" type="button">
+              پاک‌سازی تنظیمات
+            </button>
+</div>
+</div>
+<!-- Assurance Sidebar Card -->
+<div class="p-4 rounded-2xl bg-surface-container-low space-y-2.5">
+<div class="flex items-center gap-2 text-primary font-label-md text-label-md">
+<span class="material-symbols-outlined text-xl">shield_locked</span>
+<span>گارانتی طلایی سی‌ان‌ای</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">تمامی گوشی‌ها دارای کد فعال‌سازی سامانه همتا و ۱۸ ماه پشتیبانی شرکت‌های معتبر گارانتی کننده هستند.</p>
+</div>
+</aside>
+<!-- Left Column: Products Grid, Sorting Toolbar & Active Badges (lg:col-span-9) -->
+<main class="lg:col-span-9 space-y-6">
+<!-- Top Controls Shelf (Sorting + Results Count) -->
+<div class="bg-surface-container-lowest rounded-2xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+<div class="flex items-center gap-3 overflow-x-auto pb-1 md:pb-0">
+<div class="flex items-center gap-1.5 text-on-surface-variant pl-2">
+<span class="material-symbols-outlined text-lg text-primary">sort</span>
+<span class="font-label-md text-label-md whitespace-nowrap">مرتب‌سازی:</span>
+</div>
+<div class="flex items-center gap-1.5">
+<button class="px-3 py-1.5 rounded-lg bg-primary text-on-primary font-label-md text-label-md shadow-sm whitespace-nowrap" type="button">
+                جدیدترین
+              </button>
+<button class="px-3 py-1.5 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface font-label-md text-label-md whitespace-nowrap transition-colors" type="button">
+                پرفروش‌ترین
+              </button>
+<button class="px-3 py-1.5 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface font-label-md text-label-md whitespace-nowrap transition-colors" type="button">
+                ارزان‌ترین
+              </button>
+<button class="px-3 py-1.5 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface font-label-md text-label-md whitespace-nowrap transition-colors" type="button">
+                گران‌ترین
+              </button>
+<button class="px-3 py-1.5 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface font-label-md text-label-md whitespace-nowrap transition-colors" type="button">
+                محبوب‌ترین
+              </button>
+</div>
+</div>
+<!-- Total Count Badge -->
+<div class="flex items-center justify-between md:justify-end gap-3 font-label-md text-label-md text-on-surface-variant">
+<span>نمایش <strong class="text-on-surface font-bold">۸</strong> کالا از <strong class="text-on-surface font-bold">۱۲۴</strong> گوشی هوشمند</span>
+</div>
+</div>
+<!-- Active Applied Filters Chips Row -->
+<div class="flex flex-wrap items-center gap-2">
+<span class="font-label-sm text-label-sm text-on-surface-variant pl-1">فیلترهای فعال:</span>
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container text-on-secondary-fixed font-label-sm text-label-sm shadow-sm">
+<span>برند: اپل و سامسونگ</span>
+<button class="hover:text-error transition-colors flex items-center">
+<span class="material-symbols-outlined text-sm">close</span>
+</button>
+</span>
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container text-on-secondary-fixed font-label-sm text-label-sm shadow-sm">
+<span>حافظه: ۲۵۶ گیگابایت</span>
+<button class="hover:text-error transition-colors flex items-center">
+<span class="material-symbols-outlined text-sm">close</span>
+</button>
+</span>
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container text-on-secondary-fixed font-label-sm text-label-sm shadow-sm">
+<span>فقط موجود در انبار</span>
+<button class="hover:text-error transition-colors flex items-center">
+<span class="material-symbols-outlined text-sm">close</span>
+</button>
+</span>
+<button class="text-primary hover:underline font-label-sm text-label-sm pr-2">
+            پاک کردن همه فیلترها
+          </button>
+</div>
+<!-- Product Grid: 4 Columns on lg, 2 on sm, 1 on mobile -->
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+<!-- Product Card 1: iPhone 16 Pro Max (Flagship Discounted) -->
+<div class="group relative rounded-2xl bg-surface-container-lowest p-4 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between">
+<div>
+<!-- Badges & Wishlist -->
+<div class="flex items-center justify-between mb-2">
+<span class="px-2.5 py-0.5 rounded-full bg-tertiary-container text-on-tertiary font-label-sm text-label-sm font-bold shadow-sm">
+                  ۴٪ تخفیف
+                </span>
+<button class="w-8 h-8 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-error transition-colors" title="افزودن به علاقه‌مندی‌ها" type="button">
+<span class="material-symbols-outlined text-lg">favorite</span>
+</button>
+</div>
+<!-- Product Image -->
+<div class="relative w-full aspect-square rounded-xl bg-surface-container-low flex items-center justify-center overflow-hidden p-3 mb-3">
+<img class="object-contain w-full h-full group-hover:scale-105 transition-transform duration-300" data-alt="Apple iPhone 16 Pro Max in Natural Titanium metallic finish, pristine high key commercial product photography, reflective glass pedestal, slate ambient reflections, 8k resolution, razor sharp details" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5Dch095AnxyiDlKp9chceppQMxS_ID6LZU1f8TxjdxIUVFBh1E0Er8vrXQRUoqxr_jyvljTMjlTip0i73QNgxVB_UemDAO1cLZv7D8USSg4iRmxyXANrIIGOouMOt5up73X9hcbEbEcuWOGr-l1QXz5CsDez1adw2_9fp1YeMpoBcKobRI-6UcNi1ReMQ6rWweQh7sye9eBvC3zENCaG8FM9bKo1V6XJhAypIaWC3uy1oqkdUIa8TOw"/>
+<span class="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-surface-container-lowest/90 font-label-sm text-[10px] text-on-surface-variant">رنگ تیتانیوم</span>
+</div>
+<!-- Specs & Guarantee Micro-tags -->
+<div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-[11px]">۲۵۶ گیگابایت</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-[11px]">رم ۸</span>
+<span class="inline-flex items-center text-primary font-label-sm text-[11px] gap-0.5">
+<span class="material-symbols-outlined text-xs">verified</span>
+                  گارانتی ۱۸ ماهه
+                </span>
+</div>
+<!-- Titles -->
+<h2 class="font-headline-sm text-[15px] leading-snug text-on-surface font-bold group-hover:text-primary transition-colors line-clamp-2">
+                گوشی موبایل اپل مدل iPhone 16 Pro Max دو سیم‌کارت
+              </h2>
+<span class="block font-body-sm text-[11px] text-on-surface-variant mt-0.5" dir="ltr">iPhone 16 Pro Max 256GB</span>
+</div>
+<!-- Price & Purchase Action -->
+<div class="pt-4 mt-3 border-t-0 bg-surface-container-low/50 -mx-4 -mb-4 p-4 rounded-b-2xl">
+<div class="flex items-center justify-between mb-1">
+<span class="font-body-sm text-body-sm text-on-surface-variant line-through">۹۹,۸۰۰,۰۰۰</span>
+<span class="inline-flex items-center gap-1 text-[11px] font-label-sm text-tertiary-container font-semibold">ارسال رایگان</span>
+</div>
+<div class="flex items-baseline justify-between">
+<div class="flex items-baseline gap-1">
+<span class="font-price-display text-price-display text-on-surface">۹۵,۸۰۰,۰۰۰</span>
+<span class="font-price-unit text-price-unit text-on-surface-variant">تومان</span>
+</div>
+<button class="w-9 h-9 rounded-xl bg-primary text-on-primary hover:bg-primary-container flex items-center justify-center shadow-sm transition-colors" title="افزودن به سبد خرید" type="button">
+<span class="material-symbols-outlined text-xl">add_shopping_cart</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Product Card 2: Samsung Galaxy S24 Ultra -->
+<div class="group relative rounded-2xl bg-surface-container-lowest p-4 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="px-2.5 py-0.5 rounded-full bg-tertiary-container text-on-tertiary font-label-sm text-label-sm font-bold shadow-sm">
+                  ۷٪ تخفیف
+                </span>
+<button class="w-8 h-8 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-error transition-colors" title="افزودن به علاقه‌مندی‌ها" type="button">
+<span class="material-symbols-outlined text-lg">favorite</span>
+</button>
+</div>
+<div class="relative w-full aspect-square rounded-xl bg-surface-container-low flex items-center justify-center overflow-hidden p-3 mb-3">
+<img class="object-contain w-full h-full group-hover:scale-105 transition-transform duration-300" data-alt="Samsung Galaxy S24 Ultra smartphone in Titanium Gray with integrated S-Pen, crisp studio lighting, high angle front view, ultra sharp focus on camera lenses, neutral studio background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDM3Gj_l96p-ChzNJ1URT5l-uY0k7fYV8g7BbhjuLWCQUU1RMy_2h0OXc5MoREJZb8ift8ODmKB0UXG9-5VX_WaHa35uJ7ZSd7LUH-sOnSvfN5Rr3oMLw-wwY3V5cUy1CVTPOlVvRSIgRaVNIDM_ufQRB1opDQDS5Bx_726vXouGTg-SQvvVvN8QXw505cf64TthpdjZ9GbbB2dJasbUv1LRN5SDos2RsCkXnOR3YX9OGjM6m99ImXlaA"/>
+<span class="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-surface-container-lowest/90 font-label-sm text-[10px] text-on-surface-variant">خاکستری تیتانیوم</span>
+</div>
+<div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-[11px]">۲۵۶ گیگابایت</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-[11px]">رم ۱۲</span>
+<span class="inline-flex items-center text-primary font-label-sm text-[11px] gap-0.5">
+<span class="material-symbols-outlined text-xs">verified</span>
+                  گارانتی هماهنگ
+                </span>
+</div>
+<h2 class="font-headline-sm text-[15px] leading-snug text-on-surface font-bold group-hover:text-primary transition-colors line-clamp-2">
+                گوشی موبایل سامسونگ مدل Galaxy S24 Ultra 5G
+              </h2>
+<span class="block font-body-sm text-[11px] text-on-surface-variant mt-0.5" dir="ltr">Galaxy S24 Ultra 256GB</span>
+</div>
+<div class="pt-4 mt-3 bg-surface-container-low/50 -mx-4 -mb-4 p-4 rounded-b-2xl">
+<div class="flex items-center justify-between mb-1">
+<span class="font-body-sm text-body-sm text-on-surface-variant line-through">۷۴,۲۰۰,۰۰۰</span>
+<span class="inline-flex items-center gap-1 text-[11px] font-label-sm text-primary font-semibold">پرفروش ماه</span>
+</div>
+<div class="flex items-baseline justify-between">
+<div class="flex items-baseline gap-1">
+<span class="font-price-display text-price-display text-on-surface">۶۹,۰۰۰,۰۰۰</span>
+<span class="font-price-unit text-price-unit text-on-surface-variant">تومان</span>
+</div>
+<button class="w-9 h-9 rounded-xl bg-primary text-on-primary hover:bg-primary-container flex items-center justify-center shadow-sm transition-colors" title="افزودن به سبد خرید" type="button">
+<span class="material-symbols-outlined text-xl">add_shopping_cart</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Product Card 3: Xiaomi 14 Ultra -->
+<div class="group relative rounded-2xl bg-surface-container-lowest p-4 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="px-2.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-fixed font-label-sm text-label-sm font-bold">
+                  ویژه عکاسی
+                </span>
+<button class="w-8 h-8 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-error transition-colors" title="افزودن به علاقه‌مندی‌ها" type="button">
+<span class="material-symbols-outlined text-lg">favorite</span>
+</button>
+</div>
+<div class="relative w-full aspect-square rounded-xl bg-surface-container-low flex items-center justify-center overflow-hidden p-3 mb-3">
+<img class="object-contain w-full h-full group-hover:scale-105 transition-transform duration-300" data-alt="Xiaomi 14 Ultra smartphone with prominent circular Leica camera module on textured vegan leather back, professional product studio rendering, crisp soft shadows, elegant tech look" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDq1uce-W0awgTTxWQR_MLDd20sIP4cjI4ulQEhVQ_o04-XNOybOcu8zBqgkXXIqfho__UQexgY3HABdwjk-OVMcAinVHgAKTPLX4lsyg6NY3jcWn6SzljC-1HmFQRZq6DHsKZFk9RJ8mCa_8VMQ1lwvm2hL5_VJfGbvNeBJ_Dry-RkBialALz4hgFO-WEmD8pdV7q1180YnIT5ixKVOAE4uWCK3kirwFoT1OpMTcnbKrUaYA0FIc-iRg"/>
+<span class="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-surface-container-lowest/90 font-label-sm text-[10px] text-on-surface-variant">مشکی چرمی</span>
+</div>
+<div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-[11px]">۵۱۲ گیگابایت</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-[11px]">رم ۱۶</span>
+<span class="inline-flex items-center text-primary font-label-sm text-[11px] gap-0.5">
+<span class="material-symbols-outlined text-xs">verified</span>
+                  گارانتی تسکو
+                </span>
+</div>
+<h2 class="font-headline-sm text-[15px] leading-snug text-on-surface font-bold group-hover:text-primary transition-colors line-clamp-2">
+                گوشی موبایل شیائومی مدل Xiaomi 14 Ultra دوربین لایکا
+              </h2>
+<span class="block font-body-sm text-[11px] text-on-surface-variant mt-0.5" dir="ltr">Xiaomi 14 Ultra 512GB</span>
+</div>
+<div class="pt-4 mt-3 bg-surface-container-low/50 -mx-4 -mb-4 p-4 rounded-b-2xl">
+<div class="flex items-center justify-between mb-1">
+<span class="font-body-sm text-body-sm text-on-surface-variant line-through">۶۱,۵۰۰,۰۰۰</span>
+<span class="inline-flex items-center gap-1 text-[11px] font-label-sm text-tertiary-container font-semibold">ارسال رایگان</span>
+</div>
+<div class="flex items-baseline justify-between">
+<div class="flex items-baseline gap-1">
+<span class="font-price-display text-price-display text-on-surface">۵۷,۹۰۰,۰۰۰</span>
+<span class="font-price-unit text-price-unit text-on-surface-variant">تومان</span>
+</div>
+<button class="w-9 h-9 rounded-xl bg-primary text-on-primary hover:bg-primary-container flex items-center justify-center shadow-sm transition-colors" title="افزودن به سبد خرید" type="button">
+<span class="material-symbols-outlined text-xl">add_shopping_cart</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Product Card 4: Out of Stock Example (iPhone 15 Pro) -->
+<div class="group relative rounded-2xl bg-surface-container-lowest p-4 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between opacity-85">
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="px-2.5 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm font-semibold">
+                  ناموجود در انبار
+                </span>
+<button class="w-8 h-8 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-error transition-colors" title="افزودن به علاقه‌مندی‌ها" type="button">
+<span class="material-symbols-outlined text-lg">favorite</span>
+</button>
+</div>
+<div class="relative w-full aspect-square rounded-xl bg-surface-container-low flex items-center justify-center overflow-hidden p-3 mb-3 grayscale group-hover:grayscale-0 transition-all">
+<img class="object-contain w-full h-full" data-alt="Apple iPhone 15 Pro Blue Titanium back view and side rail profile, studio packshot, high contrast, clean minimalist tech photography" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCw9433Moodfwrte-mJgeiuIA8DVgkvgPHEFaYjGz6JN-WN48i5rEEgorztX8Q9dOOIlDI9lPrKyP5mz_W9g2I_qq3CZwaYmEPQDYx3SUu6WSqW9sPVbxRF8cEEqpWCmUXiaJJK-vuGTu5GAg1TR7kAEcTR0i4JrjJtjmL9wLkkO7FEci0U1CgJVDBc933Jh6ygLO-TLmFRxg1VVdat8Vo0NWlFXglTOvjZ4I1j8OufHo7phGvwIK233g"/>
+<div class="absolute inset-0 bg-surface-container-highest/40 backdrop-blur-[1px] flex items-center justify-center">
+<span class="px-3 py-1 rounded-lg bg-inverse-surface/80 text-inverse-on-surface font-label-sm text-label-sm font-bold">اتمام موجودی</span>
+</div>
+</div>
+<div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-[11px]">۱۲۸ گیگابایت</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-[11px]">رم ۸</span>
+</div>
+<h2 class="font-headline-sm text-[15px] leading-snug text-on-surface font-bold line-clamp-2">
+                گوشی موبایل اپل مدل iPhone 15 Pro تیتانیوم آبی
+              </h2>
+<span class="block font-body-sm text-[11px] text-on-surface-variant mt-0.5" dir="ltr">iPhone 15 Pro 128GB</span>
+</div>
+<!-- Notify Me Action -->
+<div class="pt-4 mt-3 bg-surface-container-low/50 -mx-4 -mb-4 p-4 rounded-b-2xl">
+<div class="flex items-center justify-between mb-2">
+<span class="font-body-sm text-body-sm text-on-surface-variant">آخرین قیمت ثبت شده</span>
+<span class="font-body-sm text-body-sm text-on-surface font-semibold">۶۴,۲۰۰,۰۰۰ تومان</span>
+</div>
+<button class="w-full h-9 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-primary font-label-md text-label-md flex items-center justify-center gap-1.5 transition-colors" type="button">
+<span class="material-symbols-outlined text-base">notifications_active</span>
+<span>خبرم کن زمان موجود شدن</span>
+</button>
+</div>
+</div>
+<!-- Product Card 5: Samsung Galaxy A55 5G (Popular Mid-ranger) -->
+<div class="group relative rounded-2xl bg-surface-container-lowest p-4 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="px-2.5 py-0.5 rounded-full bg-tertiary-container text-on-tertiary font-label-sm text-label-sm font-bold shadow-sm">
+                  ۵٪ تخفیف
+                </span>
+<button class="w-8 h-8 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-error transition-colors" title="افزودن به علاقه‌مندی‌ها" type="button">
+<span class="material-symbols-outlined text-lg">favorite</span>
+</button>
+</div>
+<div class="relative w-full aspect-square rounded-xl bg-surface-container-low flex items-center justify-center overflow-hidden p-3 mb-3">
+<img class="object-contain w-full h-full group-hover:scale-105 transition-transform duration-300" data-alt="Samsung Galaxy A55 5G smartphone in Awesome Lilac pastel finish, commercial clean product photography, vibrant clean look, subtle glossy back reflection" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0UJGaPmX4PtcjYFVZMUipmCUIg2hOLTm0SeUSoA7E0XvOF0hIrGvZSKYMGXKmmcFmCOW22pduci6JHmQZwxcZy2K4MUfAC8IwQ6CXL_6x-ICYjjPuVeaj394UGR6NM7yoJgV5vRUXW3hy_pAOwBJTaLmETQFZ9_xSvh_9zhFmI1t2Fn9J8CbdMPE--KbwQf5IdnKa0Fv8COb9dVP-xnROoQGt3rtGhYRjz5e-8z_RtNwxpbMrd3qUTw"/>
+<span class="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-surface-container-lowest/90 font-label-sm text-[10px] text-on-surface-variant">یاسی روشن</span>
+</div>
+<div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-[11px]">۲۵۶ گیگابایت</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-[11px]">رم ۸</span>
+<span class="inline-flex items-center text-primary font-label-sm text-[11px] gap-0.5">
+<span class="material-symbols-outlined text-xs">verified</span>
+                  گارانتی داریا همراه
+                </span>
+</div>
+<h2 class="font-headline-sm text-[15px] leading-snug text-on-surface font-bold group-hover:text-primary transition-colors line-clamp-2">
+                گوشی موبایل سامسونگ مدل Galaxy A55 5G دو سیم‌کارت
+              </h2>
+<span class="block font-body-sm text-[11px] text-on-surface-variant mt-0.5" dir="ltr">Galaxy A55 5G 256GB</span>
+</div>
+<div class="pt-4 mt-3 bg-surface-container-low/50 -mx-4 -mb-4 p-4 rounded-b-2xl">
+<div class="flex items-center justify-between mb-1">
+<span class="font-body-sm text-body-sm text-on-surface-variant line-through">۲۱,۸۰۰,۰۰۰</span>
+<span class="inline-flex items-center gap-1 text-[11px] font-label-sm text-primary font-semibold">پرفروش بازار</span>
+</div>
+<div class="flex items-baseline justify-between">
+<div class="flex items-baseline gap-1">
+<span class="font-price-display text-price-display text-on-surface">۲۰,۶۰۰,۰۰۰</span>
+<span class="font-price-unit text-price-unit text-on-surface-variant">تومان</span>
+</div>
+<button class="w-9 h-9 rounded-xl bg-primary text-on-primary hover:bg-primary-container flex items-center justify-center shadow-sm transition-colors" title="افزودن به سبد خرید" type="button">
+<span class="material-symbols-outlined text-xl">add_shopping_cart</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Product Card 6: Poco X6 Pro -->
+<div class="group relative rounded-2xl bg-surface-container-lowest p-4 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="px-2.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-fixed font-label-sm text-label-sm font-bold">
+                  گیمینگ اقتصادی
+                </span>
+<button class="w-8 h-8 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-error transition-colors" title="افزودن به علاقه‌مندی‌ها" type="button">
+<span class="material-symbols-outlined text-lg">favorite</span>
+</button>
+</div>
+<div class="relative w-full aspect-square rounded-xl bg-surface-container-low flex items-center justify-center overflow-hidden p-3 mb-3">
+<img class="object-contain w-full h-full group-hover:scale-105 transition-transform duration-300" data-alt="Xiaomi Poco X6 Pro 5G in signature bold Racing Yellow back with contrasting black camera deco, modern studio lighting, dynamic perspective" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNGmom9LVunooz0-yqnjDsz_rQ40-zxYjkFvno27S8mjvNQG6TGoPaWm3g9r16M7qfU6SYSp2sl-VFYYiPSyn7vTtr73Be6JpAKQpjvjMDc75yjqYlM8VcpBOexTnm-s1smPOdZFEnxDjshk5zwlHQDg1d9dGu70ZcZlgwNxG_kdRvEjn3aw8CgKBMw5Jm4zKhy3A3L7F60eXqBNuWIR9jlmVy8IkNPXjjzYub5ARWxvJbxhUhVFiwNA"/>
+<span class="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-surface-container-lowest/90 font-label-sm text-[10px] text-on-surface-variant">زرد اسپرت</span>
+</div>
+<div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-[11px]">۵۱۲ گیگابایت</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-[11px]">رم ۱۲</span>
+<span class="inline-flex items-center text-primary font-label-sm text-[11px] gap-0.5">
+<span class="material-symbols-outlined text-xs">verified</span>
+                  گارانتی ۱۸ ماهه
+                </span>
+</div>
+<h2 class="font-headline-sm text-[15px] leading-snug text-on-surface font-bold group-hover:text-primary transition-colors line-clamp-2">
+                گوشی موبایل شیائومی مدل POCO X6 Pro 5G ظرفیت ۵۱۲
+              </h2>
+<span class="block font-body-sm text-[11px] text-on-surface-variant mt-0.5" dir="ltr">POCO X6 Pro 512GB</span>
+</div>
+<div class="pt-4 mt-3 bg-surface-container-low/50 -mx-4 -mb-4 p-4 rounded-b-2xl">
+<div class="flex items-center justify-between mb-1">
+<span class="font-body-sm text-body-sm text-on-surface-variant line-through">۱۹,۷۰۰,۰۰۰</span>
+<span class="inline-flex items-center gap-1 text-[11px] font-label-sm text-tertiary-container font-semibold">ارسال سریع</span>
+</div>
+<div class="flex items-baseline justify-between">
+<div class="flex items-baseline gap-1">
+<span class="font-price-display text-price-display text-on-surface">۱۸,۹۰۰,۰۰۰</span>
+<span class="font-price-unit text-price-unit text-on-surface-variant">تومان</span>
+</div>
+<button class="w-9 h-9 rounded-xl bg-primary text-on-primary hover:bg-primary-container flex items-center justify-center shadow-sm transition-colors" title="افزودن به سبد خرید" type="button">
+<span class="material-symbols-outlined text-xl">add_shopping_cart</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Product Card 7: Honor 200 Pro -->
+<div class="group relative rounded-2xl bg-surface-container-lowest p-4 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="px-2.5 py-0.5 rounded-full bg-tertiary-container text-on-tertiary font-label-sm text-label-sm font-bold shadow-sm">
+                  ۳٪ تخفیف
+                </span>
+<button class="w-8 h-8 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-error transition-colors" title="افزودن به علاقه‌مندی‌ها" type="button">
+<span class="material-symbols-outlined text-lg">favorite</span>
+</button>
+</div>
+<div class="relative w-full aspect-square rounded-xl bg-surface-container-low flex items-center justify-center overflow-hidden p-3 mb-3">
+<img class="object-contain w-full h-full group-hover:scale-105 transition-transform duration-300" data-alt="Honor 200 Pro smartphone in Moonlight White with art-deco oval camera module, elegant aesthetic studio product shot, soft daylighting, clean shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDtAYcK2XITA1RnanW2RZX-U_1bdcvwVc2XUaYgFxe0kJnLMGwkm8ZhAipuIVvHI3UAC0uv9GngYaeZbj17Y3hEe5VsyEuDg6of9YwtA1fDOtlDHZrEx49i5Q6bR7X8TNPs6uyPGdACvDbAQyKd783AvB3OvFyI0W8c9uUubtRjmYiv1OmbCfM-2h-wWxQiADeDwg4vrBojqULLv2b_whwnkrIeGw9e2D2eqs-hZKiHnklt7k_PKSSSLg"/>
+<span class="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-surface-container-lowest/90 font-label-sm text-[10px] text-on-surface-variant">سفید مهتابی</span>
+</div>
+<div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-[11px]">۵۱۲ گیگابایت</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-[11px]">رم ۱۲</span>
+<span class="inline-flex items-center text-primary font-label-sm text-[11px] gap-0.5">
+<span class="material-symbols-outlined text-xs">verified</span>
+                  گارانتی مدیاپردازش
+                </span>
+</div>
+<h2 class="font-headline-sm text-[15px] leading-snug text-on-surface font-bold group-hover:text-primary transition-colors line-clamp-2">
+                گوشی موبایل آنر مدل Honor 200 Pro 5G استودیو هارکورت
+              </h2>
+<span class="block font-body-sm text-[11px] text-on-surface-variant mt-0.5" dir="ltr">Honor 200 Pro 512GB</span>
+</div>
+<div class="pt-4 mt-3 bg-surface-container-low/50 -mx-4 -mb-4 p-4 rounded-b-2xl">
+<div class="flex items-center justify-between mb-1">
+<span class="font-body-sm text-body-sm text-on-surface-variant line-through">۳۹,۲۰۰,۰۰۰</span>
+<span class="inline-flex items-center gap-1 text-[11px] font-label-sm text-primary font-semibold">تضمین اصالت</span>
+</div>
+<div class="flex items-baseline justify-between">
+<div class="flex items-baseline gap-1">
+<span class="font-price-display text-price-display text-on-surface">۳۷,۹۰۰,۰۰۰</span>
+<span class="font-price-unit text-price-unit text-on-surface-variant">تومان</span>
+</div>
+<button class="w-9 h-9 rounded-xl bg-primary text-on-primary hover:bg-primary-container flex items-center justify-center shadow-sm transition-colors" title="افزودن به سبد خرید" type="button">
+<span class="material-symbols-outlined text-xl">add_shopping_cart</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Product Card 8: Samsung Galaxy S23 FE -->
+<div class="group relative rounded-2xl bg-surface-container-lowest p-4 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="px-2.5 py-0.5 rounded-full bg-tertiary-container text-on-tertiary font-label-sm text-label-sm font-bold shadow-sm">
+                  ۸٪ تخفیف
+                </span>
+<button class="w-8 h-8 rounded-full bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-error transition-colors" title="افزودن به علاقه‌مندی‌ها" type="button">
+<span class="material-symbols-outlined text-lg">favorite</span>
+</button>
+</div>
+<div class="relative w-full aspect-square rounded-xl bg-surface-container-low flex items-center justify-center overflow-hidden p-3 mb-3">
+<img class="object-contain w-full h-full group-hover:scale-105 transition-transform duration-300" data-alt="Samsung Galaxy S23 FE smartphone in Mint green colorway, front angled display, studio bright rim lighting, premium glass back reflections" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCX-z6u4bAXwKNwzLXaP-wLAU3GqVA9AgugDWCUjbk3ARboV0owSEsyMh3yB3VoL0Rsir6TillHOLixXs1k4ME4jsQMbqQQvonAj5FNRe_fpNHB_Uty5oFrHxUav0yVrzaIRM940y-iJIJvWyL0SlA5_u6YbHlm9G_m2M6-xmZCA2aNXgsRCsXSSxXahlQvqbdnDZj56KDWiCn6yvYMSoVpBTfzcUzftNjQb1fc3Q9r8ekzYeODmbELTQ"/>
+<span class="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-surface-container-lowest/90 font-label-sm text-[10px] text-on-surface-variant">سبز نعنایی</span>
+</div>
+<div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-[11px]">۲۵۶ گیگابایت</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-[11px]">رم ۸</span>
+<span class="inline-flex items-center text-primary font-label-sm text-[11px] gap-0.5">
+<span class="material-symbols-outlined text-xs">verified</span>
+                  گارانتی مایکروتل
+                </span>
+</div>
+<h2 class="font-headline-sm text-[15px] leading-snug text-on-surface font-bold group-hover:text-primary transition-colors line-clamp-2">
+                گوشی موبایل سامسونگ مدل Galaxy S23 FE نسخه فن ادیشن
+              </h2>
+<span class="block font-body-sm text-[11px] text-on-surface-variant mt-0.5" dir="ltr">Galaxy S23 FE 256GB</span>
+</div>
+<div class="pt-4 mt-3 bg-surface-container-low/50 -mx-4 -mb-4 p-4 rounded-b-2xl">
+<div class="flex items-center justify-between mb-1">
+<span class="font-body-sm text-body-sm text-on-surface-variant line-through">۲۹,۴۰۰,۰۰۰</span>
+<span class="inline-flex items-center gap-1 text-[11px] font-label-sm text-tertiary-container font-semibold">ارسال رایگان</span>
+</div>
+<div class="flex items-baseline justify-between">
+<div class="flex items-baseline gap-1">
+<span class="font-price-display text-price-display text-on-surface">۲۶,۹۵۰,۰۰۰</span>
+<span class="font-price-unit text-price-unit text-on-surface-variant">تومان</span>
+</div>
+<button class="w-9 h-9 rounded-xl bg-primary text-on-primary hover:bg-primary-container flex items-center justify-center shadow-sm transition-colors" title="افزودن به سبد خرید" type="button">
+<span class="material-symbols-outlined text-xl">add_shopping_cart</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- RTL Pagination Bar -->
+<nav aria-label="صفحات محصولات" class="pt-8 pb-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+<div class="flex items-center gap-1.5 font-label-md text-label-md text-on-surface-variant">
+<span>صفحه <strong class="text-on-surface">۱</strong> از <strong class="text-on-surface">۱۶</strong></span>
+</div>
+<div class="flex items-center gap-2">
+<!-- Previous Button (Right arrow in RTL) -->
+<button class="h-10 px-3.5 rounded-xl bg-surface-container opacity-50 cursor-not-allowed flex items-center gap-1.5 text-on-surface-variant font-label-md text-label-md" disabled="" type="button">
+<span class="material-symbols-outlined text-base">arrow_forward</span>
+<span>صفحه قبل</span>
+</button>
+<!-- Page Number Chips -->
+<button class="w-10 h-10 rounded-xl bg-primary text-on-primary font-headline-sm text-sm font-bold shadow-sm flex items-center justify-center" type="button">
+              ۱
+            </button>
+<button class="w-10 h-10 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-headline-sm text-sm font-medium flex items-center justify-center transition-colors" type="button">
+              ۲
+            </button>
+<button class="w-10 h-10 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-headline-sm text-sm font-medium flex items-center justify-center transition-colors" type="button">
+              ۳
+            </button>
+<span class="px-1 text-on-surface-variant font-bold">...</span>
+<button class="w-10 h-10 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-headline-sm text-sm font-medium flex items-center justify-center transition-colors" type="button">
+              ۱۶
+            </button>
+<!-- Next Button (Left arrow in RTL) -->
+<button class="h-10 px-3.5 rounded-xl bg-surface-container hover:bg-surface-container-high flex items-center gap-1.5 text-on-surface font-label-md text-label-md transition-colors" type="button">
+<span>صفحه بعد</span>
+<span class="material-symbols-outlined text-base">arrow_back</span>
+</button>
+</div>
+</nav>
+<!-- Information FAQ Banner for Phones Category -->
+<div class="rounded-2xl bg-surface-container-lowest p-6 shadow-sm space-y-4 mt-8">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-primary text-2xl">help_outline</span>
+<h3 class="font-headline-md text-headline-md text-on-surface">راهنمای جامع خرید آنلاین گوشی موبایل در CNA Mobile</h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-justify font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+<p>
+              تمامی گوشی‌های ارائه‌شده در فروشگاه اینترنتی سی‌ان‌ای موبایل به صورت کاملاً رسمی و رجیستر شده در سامانه همتا ارائه می‌شوند. بسته‌بندی دستگاه‌ها دارای پلمپ اصلی شرکت‌های واردکننده معتبر و گارانتی ۱۸ ماهه طلایی است.
+            </p>
+<p>
+              در صورت تمایل می‌توانید در زمان خرید، از طرح بیمه تکمیلی شکستگی صفحه نمایش و سرقت با پوشش ۸۵ درصدی خسارت نیز بهره‌مند شوید. کارشناسان پشتیبانی فنی همه روزه آماده پاسخگویی به سوالات شما هستند.
+            </p>
+</div>
+</div>
+</main>
+</div>
+</section>
+</div></main><footer class="w-full bg-surface-container-low text-on-surface pt-12 pb-8 mt-16 shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="max-w-7xl mx-auto px-6 lg:px-12"><div class="grid grid-cols-2 md:grid-cols-4 gap-6 pb-12"><div class="flex items-center gap-4 p-4 rounded-xl bg-surface-container-lowest"><span class="material-symbols-outlined text-3xl text-primary">verified</span><div><div class="font-label-lg text-label-lg text-on-surface">ضمانت اصالت ۱۰۰٪</div><div class="font-body-sm text-body-sm text-on-surface-variant">گارانتی رسمی و معتبر شرکتی</div></div></div><div class="flex items-center gap-4 p-4 rounded-xl bg-surface-container-lowest"><span class="material-symbols-outlined text-3xl text-primary">local_shipping</span><div><div class="font-label-lg text-label-lg text-on-surface">تحویل فوری و اکسپرس</div><div class="font-body-sm text-body-sm text-on-surface-variant">ارسال سریع به سراسر کشور</div></div></div><div class="flex items-center gap-4 p-4 rounded-xl bg-surface-container-lowest"><span class="material-symbols-outlined text-3xl text-primary">published_with_changes</span><div><div class="font-label-lg text-label-lg text-on-surface">۷ روز مهلت بازگشت</div><div class="font-body-sm text-body-sm text-on-surface-variant">تضمین بازگشت وجه بی‌قید و شرط</div></div></div><div class="flex items-center gap-4 p-4 rounded-xl bg-surface-container-lowest"><span class="material-symbols-outlined text-3xl text-primary">support_agent</span><div><div class="font-label-lg text-label-lg text-on-surface">پشتیبانی ۲۴ ساعته</div><div class="font-body-sm text-body-sm text-on-surface-variant">پاسخگویی در تمام ایام هفته</div></div></div></div><div class="grid grid-cols-1 md:grid-cols-5 gap-8 py-10"><div class="md:col-span-2 space-y-4"><div class="flex items-center gap-3"><img alt="CNA Mobile Logo" class="h-7 w-auto object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNpElgPvxQWS5cLzvXKBBkvHUBkq1cpO6nL0AHHxkrMVeb-scS6B0zkLYvoaBj6V81iKkjiNeUhShco1LVp5HgHQh5MPdzFvA1RitQsZS8AlFsDFLCgJ1sTL3llqjJbVRFQAhZCXZV1tDDbsA2F6npJjXU2uHNjzUGBQxQspyWlcONKszCfIsYRA8rVUkN0Pe8N7zGbjlgRyRmg7EzaTSZPiXfBm5hI88dxwAsKnk5Ubl6Wu_cYx8Nqg"/><span class="font-headline-sm text-headline-sm text-on-surface">سی‌ان‌ای موبایل</span></div><p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed text-justify">فروشگاه تخصصی سی‌ان‌ای موبایل (CNA Mobile) ارائه‌دهنده جدیدترین گوشی‌های هوشمند، تبلت‌ها و بروزترین لوازم جانبی اورجینال از برندهای اپل، سامسونگ، شیائومی و انکر است. تعهد ما به اصالت کالا و رضایت پایدار مشتریان است.</p><div class="flex items-center gap-2 pt-2 font-body-sm text-body-sm text-on-surface-variant"><span class="material-symbols-outlined text-primary text-lg">call</span><span>شماره تماس: ۰۲۱-۸۸۸۸۹۹۹۹ | ساعت پاسخگویی ۹ الی ۲۱</span></div></div><div><h4 class="font-headline-sm text-headline-sm text-on-surface mb-4">دسترسی سریع</h4><ul class="space-y-2.5 font-body-sm text-body-sm text-on-surface-variant"><li><a class="hover:text-primary transition-colors" data-path="phones-catalog" href="#">گوشی‌های پرچمدار</a></li><li><a class="hover:text-primary transition-colors" data-path="power-charger" href="#">شارژر و کابل اورجینال</a></li><li><a class="hover:text-primary transition-colors" data-path="audio" href="#">هدفون و ایرپاد</a></li><li><a class="hover:text-primary transition-colors" data-path="special-offers" href="#">تخفیف‌های شگفت‌انگیز</a></li><li><a class="hover:text-primary transition-colors" data-path="order-tracking" href="#">پیگیری سفارش‌ها</a></li></ul></div><div><h4 class="font-headline-sm text-headline-sm text-on-surface mb-4">خدمات مشتریان</h4><ul class="space-y-2.5 font-body-sm text-body-sm text-on-surface-variant"><li><a class="hover:text-primary transition-colors" data-path="faq" href="#">پرسش‌های متداول</a></li><li><a class="hover:text-primary transition-colors" data-path="return-terms" href="#">شرایط مرجوعی کالا</a></li><li><a class="hover:text-primary transition-colors" data-path="privacy-policy" href="#">حریم خصوصی کاربران</a></li><li><a class="hover:text-primary transition-colors" data-path="guarantee-info" href="#">شرایط و ثبت گارانتی</a></li><li><a class="hover:text-primary transition-colors" data-path="contact-us" href="#">تماس با ما</a></li></ul></div><div class="space-y-4"><h4 class="font-headline-sm text-headline-sm text-on-surface">خبرنامه تخفیف‌ها</h4><p class="font-body-sm text-body-sm text-on-surface-variant">از جدیدترین پیشنهادها و کوپن‌های تخفیف مطلع شوید:</p><div class="flex items-center gap-2"><input class="w-full h-10 px-3 rounded-lg bg-surface-container-lowest text-on-surface font-body-sm text-body-sm focus:outline-none focus:ring-1 focus:ring-primary" placeholder="شماره موبایل یا ایمیل" type="email"/><button class="h-10 px-4 rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:bg-primary-container transition-colors" type="button">عضویت</button></div><div class="flex items-center gap-3 pt-3"><div class="w-12 h-14 bg-surface-container-lowest rounded-lg p-2 flex items-center justify-center text-on-surface-variant font-label-sm text-label-sm shadow-[0_1px_8px_rgba(0,0,0,0.04)]">اینماد</div><div class="w-12 h-14 bg-surface-container-lowest rounded-lg p-2 flex items-center justify-center text-on-surface-variant font-label-sm text-label-sm shadow-[0_1px_8px_rgba(0,0,0,0.04)]">ساماندهی</div><div class="w-12 h-14 bg-surface-container-lowest rounded-lg p-2 flex items-center justify-center text-on-surface-variant font-label-sm text-label-sm shadow-[0_1px_8px_rgba(0,0,0,0.04)]">عضو اتحادیه</div></div></div></div><div class="pt-8 mt-6 flex flex-col md:flex-row items-center justify-between gap-4 font-body-sm text-body-sm text-on-surface-variant"><p>© ۱۴۰۳ تمامی حقوق مادی و معنوی این وب‌سایت متعلق به فروشگاه سی‌ان‌ای موبایل است.</p><p class="font-label-sm text-label-sm">طراحی و توسعه با بالاترین استاندارد رابط کاربری</p></div></div></footer></body></html>

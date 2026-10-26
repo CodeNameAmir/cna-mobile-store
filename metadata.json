@@ -1,0 +1,6 @@
+{
+  "name": "سیانای موبایل | CNA Mobile Store",
+  "description": "فروشگاه تخصصی آنلاین گوشی‌های هوشمند، تبلت و لوازم جانبی اورجینال با ضمانت رسمی و ارسال اکسپرس",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
