@@ -8,7 +8,7 @@ const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹
 /**
  * Converts English digits (0-9) to Persian digits (۰-۹)
  */
-export function toPersianDigits(input: number | string): string {
+export function toPersianDigits(input: number | string | undefined | null): string {
   if (input === undefined || input === null) return '';
   return input
     .toString()
@@ -19,8 +19,8 @@ export function toPersianDigits(input: number | string): string {
  * Formats an integer into Persian digits with thousand separators:
  * e.g., 95800000 -> "۹۵٬۸۰۰٬۰۰۰"
  */
-export function formatPersianNumber(amount: number): string {
-  if (isNaN(amount)) return '۰';
+export function formatPersianNumber(amount: number | undefined | null): string {
+  if (amount === undefined || amount === null || isNaN(amount)) return '۰';
   // Enforce integer math for currency
   const integerAmount = Math.round(amount);
   return new Intl.NumberFormat('fa-IR', {
@@ -32,7 +32,7 @@ export function formatPersianNumber(amount: number): string {
  * Formats integer amount to Persian currency string with "تومان":
  * e.g., 95800000 -> "۹۵٬۸۰۰٬۰۰۰ تومان"
  */
-export function formatToman(amount: number): string {
+export function formatToman(amount: number | undefined | null): string {
   return `${formatPersianNumber(amount)} تومان`;
 }
 

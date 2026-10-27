@@ -11,12 +11,14 @@ import {
   HelpCircle,
   RotateCcw,
 } from 'lucide-react';
-import { PRODUCTS } from '../services/mockData';
 import { ProductCard } from '../components/ui/ProductCard';
 import { Breadcrumb } from '../components/layout/Breadcrumb';
 import { NotifyModal } from '../components/ui/NotifyModal';
 import { Product, Brand, FilterState } from '../types';
 import { formatPersianNumber, toPersianDigits } from '../utils/formatters';
+import { useProducts } from '../hooks/useProductsQuery';
+import { CatalogSkeletonGrid } from '../components/ui/LoadingSkeleton';
+import { ErrorMessage } from '../components/ui/ErrorMessage';
 
 const ALL_BRANDS: { brand: Brand; count: number }[] = [
   { brand: 'Apple', count: 32 },
@@ -125,9 +127,11 @@ export const CatalogPage: React.FC = () => {
     });
   };
 
+  const { data: serverProducts = [], isLoading, isError, error, refetch, isFetching } = useProducts();
+
   // Filter logic
   const filteredProducts = useMemo(() => {
-    let result = [...PRODUCTS];
+    let result = [...serverProducts];
 
     if (initialCategory) {
       result = result.filter((p) => p.category === initialCategory);
@@ -187,7 +191,7 @@ export const CatalogPage: React.FC = () => {
     }
 
     return result;
-  }, [filters, initialCategory, initialSpecial]);
+  }, [serverProducts, filters, initialCategory, initialSpecial]);
 
   // Brand search in sidebar
   const visibleBrands = ALL_BRANDS.filter((b) =>
@@ -591,8 +595,16 @@ export const CatalogPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Product Grid */}
-            {filteredProducts.length === 0 ? (
+            {/* Product Grid State Handling */}
+            {isLoading ? (
+              <CatalogSkeletonGrid count={8} />
+            ) : isError ? (
+              <ErrorMessage
+                message={error instanceof Error ? error.message : undefined}
+                onRetry={() => refetch()}
+                isRetrying={isFetching}
+              />
+            ) : filteredProducts.length === 0 ? (
               <div className="p-12 bg-white rounded-2xl border border-slate-200 text-center space-y-3">
                 <HelpCircle className="w-10 h-10 text-slate-400 mx-auto" />
                 <h3 className="text-base font-bold text-slate-800">هیچ محصولی با این فیلترها یافت نشد</h3>

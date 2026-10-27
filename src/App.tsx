@@ -1,5 +1,7 @@
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './queryClient';
 import { CartProvider } from './context/CartContext';
 import { AdminDataProvider } from './context/AdminDataContext';
 import { Header } from './components/layout/Header';
@@ -9,6 +11,7 @@ import { HomePage } from './pages/HomePage';
 import { CatalogPage } from './pages/CatalogPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { CartPage } from './pages/CartPage';
+import { CheckoutPage } from './pages/CheckoutPage';
 
 // Admin Panel Pages & Layout
 import { AdminLayout } from './components/admin/AdminLayout';
@@ -38,10 +41,11 @@ const StorefrontWrapper: React.FC<{ children: React.ReactNode }> = ({ children }
 
 export default function App() {
   return (
-    <HashRouter>
-      <AdminDataProvider>
-        <CartProvider>
-          <Routes>
+    <QueryClientProvider client={queryClient}>
+      <HashRouter>
+        <AdminDataProvider>
+          <CartProvider>
+            <Routes>
             {/* Storefront Routes */}
             <Route
               path="/"
@@ -72,6 +76,14 @@ export default function App() {
               element={
                 <StorefrontWrapper>
                   <CartPage />
+                </StorefrontWrapper>
+              }
+            />
+            <Route
+              path="/checkout"
+              element={
+                <StorefrontWrapper>
+                  <CheckoutPage />
                 </StorefrontWrapper>
               }
             />
@@ -142,5 +154,6 @@ export default function App() {
         </CartProvider>
       </AdminDataProvider>
     </HashRouter>
-  );
+  </QueryClientProvider>
+);
 }

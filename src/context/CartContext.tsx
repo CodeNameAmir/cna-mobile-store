@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { CartItem, Product } from '../types';
 import { PRODUCTS } from '../services/mockData';
+import { cartService } from '../services/cartService';
 
 interface ToastState {
   show: boolean;
@@ -79,7 +80,7 @@ const getInitialItems = (): CartItem[] => {
   return defaultItems;
 };
 
-const CartContext = createContext<CartContextType | undefined>(undefined);
+export const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [items, setItems] = useState<CartItem[]>(getInitialItems);
@@ -95,6 +96,25 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     message: '',
     type: 'success',
   });
+
+  // Cross-tab synchronization via local window storage event
+  // NOTE: This purely syncs localStorage across tabs in the same local browser; it is not Supabase Realtime.
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === CART_STORAGE_KEY && e.newValue) {
+        try {
+          setItems(JSON.parse(e.newValue));
+        } catch (err) {
+          console.error('Failed to sync cart from other tab', err);
+        }
+      }
+      if (e.key === COUPON_STORAGE_KEY) {
+        setAppliedCoupon(e.newValue || null);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // Sync to localStorage
   useEffect(() => {
@@ -204,23 +224,21 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const applyCoupon = (code: string): boolean => {
-    const clean = code.trim().toUpperCase();
+    const clean = code.trim();
     if (!clean) {
       setCouponMessage({ text: 'لطفاً کد تخفیف را وارد نمایید', isError: true });
       return false;
     }
 
-    if (clean === 'CNA-OFF' || clean === 'تخفیف' || clean === 'CNA2025') {
-      setAppliedCoupon(clean);
-      setCouponMessage({
-        text: 'کد تخفیف معتبر اعمال گردید (۵۰۰,۰۰۰ تومان کسر شد)',
-        isError: false,
-      });
-      showToast('کد تخفیف ۵۰۰,۰۰۰ تومانی با موفقیت اعمال شد', 'success');
+    const { isValid, message, discountToman } = cartService.verifyCoupon(clean, subtotalAmount);
+    if (isValid) {
+      setAppliedCoupon(clean.toUpperCase());
+      setCouponMessage({ text: message, isError: false });
+      showToast(`کد تخفیف اعمال شد (${discountToman.toLocaleString('fa-IR')} تومان کسر گردید)`, 'success');
       return true;
     }
 
-    setCouponMessage({ text: 'کد وارد شده نامعتبر است یا منقضی شده است', isError: true });
+    setCouponMessage({ text: message, isError: true });
     return false;
   };
 
@@ -230,30 +248,15 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     showToast('کد تخفیف حذف گردید', 'info');
   };
 
-  // Calculations
-  const totalItemsCount = items.reduce((sum, item) => sum + item.quantity, 0);
-
-  // Subtotal based on original prices (or price if no original)
-  const subtotalAmount = items.reduce(
-    (sum, item) => sum + (item.originalPrice || item.price) * item.quantity,
-    0
-  );
-
-  // Product discounts
-  const itemLevelDiscount = items.reduce(
-    (sum, item) => sum + ((item.originalPrice || item.price) - item.price) * item.quantity,
-    0
-  );
-
-  // Voucher discount
-  const voucherDiscount = appliedCoupon && items.length > 0 ? 500000 : 0;
-
-  const totalDiscount = itemLevelDiscount + voucherDiscount;
-
-  // Free shipping over 1,000,000 Toman, else 50,000 Toman (if items > 0)
-  const shippingCost = items.length === 0 ? 0 : subtotalAmount - itemLevelDiscount >= 1000000 ? 0 : 50000;
-
-  const finalPayableAmount = Math.max(0, subtotalAmount - totalDiscount + shippingCost);
+  // Preview Calculations via centralized cartService
+  const {
+    totalItemsCount,
+    subtotalAmount,
+    totalDiscount,
+    voucherDiscount,
+    shippingCost,
+    finalPayableAmount,
+  } = cartService.calculateTotals(items, appliedCoupon);
 
   return (
     <CartContext.Provider

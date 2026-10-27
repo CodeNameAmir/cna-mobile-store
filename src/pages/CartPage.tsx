@@ -732,7 +732,7 @@ export const CartPage: React.FC = () => {
                 {activeStep === 1 && (
                   <button
                     type="button"
-                    onClick={handleProceedToStep2}
+                    onClick={() => navigate('/checkout')}
                     className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-95"
                   >
                     <span>ادامه فرایند خرید و ثبت آدرس</span>

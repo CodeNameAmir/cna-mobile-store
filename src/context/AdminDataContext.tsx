@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { queryClient } from '../queryClient';
+import { PRODUCTS_QUERY_KEY } from '../hooks/useProductsQuery';
 import {
   Product,
   Order,
@@ -791,9 +793,10 @@ export const AdminDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }, 3500);
   };
 
-  // Sync with local storage
+  // Sync with local storage & invalidate storefront queries
   useEffect(() => {
     localStorage.setItem('cna_admin_products', JSON.stringify(products));
+    queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY_KEY });
   }, [products]);
 
   useEffect(() => {
