@@ -581,12 +581,12 @@ BEGIN
         UPDATE payments SET status = 'refund_pending', updated_at = NOW() WHERE id = v_payment.id;
 
         INSERT INTO payment_transactions (
-            payment_id, gateway, amount_toman, authority_token,
+            payment_id, parent_transaction_id, transaction_type, gateway, amount_toman, authority_token,
             idempotency_key, status, raw_response
         ) VALUES (
-            v_payment.id, v_ptx.gateway, v_order.total_amount_toman, 'REFUND-' || p_order_id,
+            v_payment.id, v_ptx.id, 'refund', v_ptx.gateway, v_order.total_amount_toman, 'REFUND-' || p_order_id,
             'IDEMP-REFUND-CANCELLED-' || p_order_id, 'initiated',
-            jsonb_build_object('reason', 'order_was_cancelled_prior_to_payment', 'original_tx', p_payment_transaction_id)
+            jsonb_build_object('reason', 'order_was_cancelled_prior_to_payment', 'original_tx', p_payment_transaction_id, 'refund_attempts', '[]'::jsonb)
         ) RETURNING id INTO v_refund_tx_id;
 
         UPDATE payment_transactions
@@ -692,12 +692,12 @@ BEGIN
         WHERE id = v_payment.id;
 
         INSERT INTO payment_transactions (
-            payment_id, gateway, amount_toman, authority_token,
+            payment_id, parent_transaction_id, transaction_type, gateway, amount_toman, authority_token,
             idempotency_key, status, raw_response
         ) VALUES (
-            v_payment.id, v_ptx.gateway, v_order.total_amount_toman, 'REFUND-' || p_order_id,
+            v_payment.id, v_ptx.id, 'refund', v_ptx.gateway, v_order.total_amount_toman, 'REFUND-' || p_order_id,
             'IDEMP-REFUND-LATE-' || p_order_id, 'initiated',
-            jsonb_build_object('reason', 'stock_exhausted_multi_warehouse', 'original_tx', p_payment_transaction_id)
+            jsonb_build_object('reason', 'stock_exhausted_multi_warehouse', 'original_tx', p_payment_transaction_id, 'refund_attempts', '[]'::jsonb)
         ) RETURNING id INTO v_refund_tx_id;
 
         UPDATE payment_transactions
@@ -725,14 +725,15 @@ GRANT EXECUTE ON FUNCTION rpc_handle_late_payment_callback TO service_role;
 
 ---
 
-### ۴.۴. چرخه کامل، تکرارپذیر و پایاپای استرداد وجه با اعتبارسنجی سروری و مکانیزم تلاش مجدد پایدار
+### ۴.۴. چرخه کامل، تکرارپذیر و پایاپای استرداد وجه با اعتبارسنجی ساختاریافته و تفکیک تلاش‌های مجدد
 ```sql
 CREATE OR REPLACE FUNCTION rpc_process_gateway_refund(
     p_refund_transaction_id UUID,
     p_gateway_refund_ref VARCHAR,
     p_verified_success BOOLEAN,
     p_error_message TEXT DEFAULT NULL,
-    p_idempotency_key VARCHAR DEFAULT NULL
+    p_idempotency_key VARCHAR DEFAULT NULL,
+    p_attempt_id UUID DEFAULT gen_random_uuid()
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -741,37 +742,22 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_tx RECORD;
+    v_parent_ptx RECORD;
     v_payment RECORD;
     v_order RECORD;
     v_is_service_role BOOLEAN := (COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role');
     v_retry_count INT;
     v_next_retry TIMESTAMPTZ;
     v_retry_status VARCHAR;
-    v_existing_tx_id UUID;
-    v_existing_status VARCHAR;
+    v_existing_attempt JSONB;
+    v_attempt_record JSONB;
 BEGIN
-    -- ۱. کنترل سطح دسترسی سروری
+    -- ۱. کنترل سطح دسترسی سروری و مرز اعتماد (Gateway Trust Boundary)
     IF NOT v_is_service_role AND NOT auth.user_has_permission('finance:manage') THEN
-        RAISE EXCEPTION 'دسترسی غیرمجاز جهت ثبت یا تایید استرداد وجه.';
+        RAISE EXCEPTION 'دسترسی غیرمجاز: اجرای فرآیند استرداد منحصراً توسط سرویس سروری مورد اعتماد (service_role) مجاز است.';
     END IF;
 
-    -- ۲. اعتبارسنجی استفاده واقعی از کلید ضدتکرار (Idempotency Protection)
-    IF p_idempotency_key IS NOT NULL THEN
-        SELECT id, status INTO v_existing_tx_id, v_existing_status
-        FROM payment_transactions
-        WHERE raw_response->>'refund_callback_idempotency_key' = p_idempotency_key
-           OR idempotency_key = p_idempotency_key;
-
-        IF FOUND AND v_existing_status = 'verified' THEN
-            RETURN jsonb_build_object(
-                'success', true, 
-                'status', 'already_refunded_verified_idempotent',
-                'transaction_id', v_existing_tx_id
-            );
-        END IF;
-    END IF;
-
-    -- ۳. قفل بدبینانه تراکنش استرداد
+    -- ۲. قفل بدبینانه تراکنش استرداد
     SELECT * INTO v_tx 
     FROM payment_transactions 
     WHERE id = p_refund_transaction_id 
@@ -781,14 +767,34 @@ BEGIN
         RAISE EXCEPTION 'تراکنش استرداد مورد نظر یافت نشد.';
     END IF;
 
-    -- ۴. بررسی اینکه این تراکنش یک تراکنش استرداد است و نه تراکنش پرداخت اصلی خرید
-    IF v_tx.authority_token NOT LIKE 'REFUND-%' AND 
-       COALESCE(v_tx.raw_response->>'is_refund', 'false') <> 'true' AND
-       v_tx.raw_response->>'reason' IS NULL THEN
-        RAISE EXCEPTION 'خطای اعتبارسنجی: شناسه ارسال شده مربوط به تراکنش استرداد نیست (تراکنش پرداخت اصلی قابل استرداد به عنوان سند مرجع نمی‌باشد).';
+    -- ۳. اعتبارسنجی ساختاریافته نوع تراکنش (عدم پذیرش تراکنش خرید اصلی به عنوان استرداد)
+    IF v_tx.transaction_type <> 'refund' THEN
+        RAISE EXCEPTION 'خطای اعتبارسنجی: تراکنش ارسالی از نوع استرداد (refund) نمی‌باشد (نوع تراکنش: %). تراکنش‌های پرداخت خرید اصلی به هیچ عنوان به عنوان سند استرداد پذیرفته نمی‌شوند.', v_tx.transaction_type;
     END IF;
 
-    -- ۵. اعتبارسنجی پیوند و وابستگی پرونده پرداخت والد و سفارش
+    -- ۴. اعتبارسنجی ارجاع به تراکنش والد خرید اصلی و بررسی سقف مبلغ استرداد
+    IF v_tx.parent_transaction_id IS NULL THEN
+        RAISE EXCEPTION 'خطای یکپارچگی: تراکنش استرداد فاقد ارجاع به تراکنش خرید والد (parent_transaction_id) است.';
+    END IF;
+
+    SELECT * INTO v_parent_ptx 
+    FROM payment_transactions 
+    WHERE id = v_tx.parent_transaction_id 
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'تراکنش پرداخت خرید والد یافت نشد.';
+    END IF;
+
+    IF v_parent_ptx.transaction_type <> 'payment' OR v_parent_ptx.status <> 'verified' THEN
+        RAISE EXCEPTION 'تراکنش والد باید یک پرداخت خرید قطعی و تاییدشده باشد.';
+    END IF;
+
+    IF v_tx.amount_toman > v_parent_ptx.amount_toman THEN
+        RAISE EXCEPTION 'مبلغ استرداد درخواستی (%) از مبلغ تراکنش اصلی خرید (%) فراتر است.', v_tx.amount_toman, v_parent_ptx.amount_toman;
+    END IF;
+
+    -- ۵. اعتبارسنجی پرونده پرداخت و سفارش
     SELECT * INTO v_payment FROM payments WHERE id = v_tx.payment_id FOR UPDATE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'پرونده پرداخت متناظر با این استرداد یافت نشد.';
@@ -799,23 +805,67 @@ BEGIN
         RAISE EXCEPTION 'سفارش متناظر با این پرونده استرداد یافت نشد.';
     END IF;
 
-    -- ۶. رفتار پایاپای در صورت تایید قبلی (Idempotency Check)
+    -- ۶. اعتبارسنجی انحصار کلید ضدتکرار به همین تراکنش (Idempotency Key Scoping)
+    IF p_idempotency_key IS NOT NULL THEN
+        -- الف) بررسی عدم استفاده از این کلید ضدتکرار در هر تراکنش استرداد دیگر
+        IF EXISTS (
+            SELECT 1 
+            FROM payment_transactions 
+            WHERE id <> p_refund_transaction_id 
+              AND (
+                idempotency_key = p_idempotency_key 
+                OR raw_response->'refund_attempts' @> jsonb_build_array(jsonb_build_object('idempotency_key', p_idempotency_key))
+              )
+        ) THEN
+            RAISE EXCEPTION 'خطای امنیتی: کلید ضدتکرار ارسالی قبلاً برای یک تراکنش دیگر ثبت شده است.';
+        END IF;
+
+        -- ب) بررسی تکرار درخواست روی همین تراکنش: در صورت تکرار کلید، حتی اگر تلاش قبلی شکست خورده باشد،
+        -- نباید retry_count افزایش یابد یا تلاش بانکی جدید ایجاد گردد!
+        SELECT elem INTO v_existing_attempt 
+        FROM jsonb_array_elements(COALESCE(v_tx.raw_response->'refund_attempts', '[]'::jsonb)) AS elem
+        WHERE elem->>'idempotency_key' = p_idempotency_key;
+
+        IF v_existing_attempt IS NOT NULL THEN
+            RETURN jsonb_build_object(
+                'success', (v_existing_attempt->>'success')::boolean,
+                'status', 'idempotent_duplicate_request',
+                'attempt_id', v_existing_attempt->>'attempt_id',
+                'retry_count', v_tx.raw_response->>'retry_count',
+                'message', 'درخواست با کلید ضدتکرار تکراری دریافت شد؛ نتیجه تلاش پیشین بدون تغییر بازگردانده شد.',
+                'original_attempt', v_existing_attempt
+            );
+        END IF;
+    END IF;
+
+    -- ۷. رفتار پایاپای در صورت تایید قبلی کلیت استرداد
     IF v_tx.status = 'verified' AND p_verified_success THEN
         RETURN jsonb_build_object('success', true, 'status', 'already_refunded_verified', 'shaparak_rrn', v_tx.shaparak_rrn);
     END IF;
 
-    -- ۷. پردازش نتیجه بر اساس تایید قطعی بانکی و مدیریت موفقیت پس از شکست قبلی
+    -- ۸. پردازش نتیجه تلاش واقعی جدید با شناسه تلاش یکتا و ممیزی‌پذیر (Auditable Attempt ID)
     IF p_verified_success THEN
-        -- وضعیت استرداد قطعی شده است (حتی در صورت شکست در تلاش‌های قبلی، رویداد بازیابی ثبت می‌گردد)
+        v_attempt_record := jsonb_build_object(
+            'attempt_id', p_attempt_id,
+            'idempotency_key', p_idempotency_key,
+            'success', true,
+            'timestamp', NOW(),
+            'shaparak_rrn', p_gateway_refund_ref
+        );
+
         UPDATE payment_transactions
         SET status = 'verified',
             shaparak_rrn = p_gateway_refund_ref,
             verified_at = NOW(),
-            raw_response = COALESCE(raw_response, '{}'::jsonb) || jsonb_build_object(
+            raw_response = jsonb_set(
+                COALESCE(raw_response, '{}'::jsonb),
+                '{refund_attempts}',
+                COALESCE(raw_response->'refund_attempts', '[]'::jsonb) || jsonb_build_array(v_attempt_record)
+            ) || jsonb_build_object(
                 'refund_verified', true,
                 'verified_at', NOW(),
                 'recovered_after_failure', (v_tx.status = 'failed'),
-                'refund_callback_idempotency_key', p_idempotency_key
+                'last_successful_attempt_id', p_attempt_id
             )
         WHERE id = v_tx.id;
 
@@ -833,30 +883,43 @@ BEGIN
         RETURN jsonb_build_object(
             'success', true, 
             'status', CASE WHEN v_tx.status = 'failed' THEN 'refund_recovered_after_failure' ELSE 'refund_completed' END,
+            'attempt_id', p_attempt_id,
             'shaparak_rrn', p_gateway_refund_ref
         );
     ELSE
-        -- عدم موفقیت در درگاه؛ محاسبه زمان‌بندی تلاش مجدد پایدار با Exponential Backoff
+        -- عدم موفقیت در تلاش جدید درگاه؛ افزایش شمارنده تلاش مجدد واقعی
         v_retry_count := COALESCE((v_tx.raw_response->>'retry_count')::int, 0) + 1;
 
         IF v_retry_count >= 5 THEN
             v_next_retry := NULL;
             v_retry_status := 'manual_finance_intervention_required';
         ELSE
-            -- فرمول نمایی تلاش مجدد: 2.5 دقیقه، 5 دقیقه، 10 دقیقه، 20 دقیقه
             v_next_retry := NOW() + ((POWER(2, v_retry_count) * 2.5) * INTERVAL '1 minute');
             v_retry_status := 'retry_scheduled';
         END IF;
 
+        v_attempt_record := jsonb_build_object(
+            'attempt_id', p_attempt_id,
+            'idempotency_key', p_idempotency_key,
+            'success', false,
+            'timestamp', NOW(),
+            'error', p_error_message,
+            'retry_count', v_retry_count
+        );
+
         UPDATE payment_transactions
         SET status = 'failed',
-            raw_response = COALESCE(raw_response, '{}'::jsonb) || jsonb_build_object(
+            raw_response = jsonb_set(
+                COALESCE(raw_response, '{}'::jsonb),
+                '{refund_attempts}',
+                COALESCE(raw_response->'refund_attempts', '[]'::jsonb) || jsonb_build_array(v_attempt_record)
+            ) || jsonb_build_object(
                 'refund_error', p_error_message,
                 'retry_count', v_retry_count,
                 'last_attempt_at', NOW(),
                 'next_retry_at', v_next_retry,
                 'retry_status', v_retry_status,
-                'refund_callback_idempotency_key', p_idempotency_key
+                'last_failed_attempt_id', p_attempt_id
             )
         WHERE id = v_tx.id;
 
@@ -868,6 +931,7 @@ BEGIN
         RETURN jsonb_build_object(
             'success', false,
             'status', 'refund_failed',
+            'attempt_id', p_attempt_id,
             'retry_count', v_retry_count,
             'next_retry_at', v_next_retry,
             'action', v_retry_status,
@@ -880,3 +944,25 @@ $$;
 REVOKE EXECUTE ON FUNCTION rpc_process_gateway_refund FROM PUBLIC, authenticated;
 GRANT EXECUTE ON FUNCTION rpc_process_gateway_refund TO service_role;
 ```
+
+---
+
+## ۵. مرز اعتماد و معماری اعتبارسنجی درگاه بانکی (Gateway Verification Trust Boundary)
+
+> [!CAUTION]
+> **مرز اعتماد سخت‌گیرانه سمت سرور (Zero-Trust Caller Architecture):**
+> پایگاه داده CNA و توابع مالی آن هرگز صرف ارسال مقدار `p_verified_success = TRUE` توسط یک فراخواننده را به عنوان مدرک اثبات پرداخت یا استرداد تلقی نمی‌کنند. امنیت شبکه پرداخت تابع الزامات زیر است:
+
+1. **انحصار کلید `service_role` به سرورهای پشتیبان امن:**
+   کلید محرمانه `SUPABASE_SERVICE_ROLE_KEY` هرگز و تحت هیچ شرایطی نباید در کلاینت، مرورگر وب، باندل‌های جاوااسکریپت یا اپلیکیشن‌های موبایل قرار گیرد. این کلید صرفاً در محیط امن سرورهای پشتیبان (Backend Server یا Supabase Edge Functions) به عنوان متغیر محیطی بارگذاری می‌شود.
+2. **اعتبارسنجی واقعی و مستقل پاسخ درگاه توسط سرور:**
+   پیش از فراخوانی هریک از روال‌های `rpc_process_gateway_refund` یا `rpc_handle_late_payment_callback` با مقدار `p_verified_success = TRUE`، سرور پشتیبان موظف است چهار گام اعتبارسنجی مستقل را تکمیل نماید:
+   - **اعتبارسنجی امضای دیجیتال / HMAC:** بررسی امضای رمزنوشته دریافتی در وب‌هوک با کلید خصوصی شاپرک جهت اطمینان از عدم جعل منشا پیام.
+   - **استعلام مستقیم از وب‌سرویس وریفای بانک (Server-to-Bank Mutual Verification):** سرور باید راساً با متد HTTPS/mTLS وب‌سرویس تایید تراکنش درگاه شاپرک (`/verify` یا `/refund/inquiry`) را فراخوانی کرده و نتیجه موفقیت‌آمیز را مستقیماً از سوئیچ بانکی دریافت نماید.
+   - **تطابق ۴گانه اقلام تراکنش (4-Way Entity Reconciliation):** سرور باید صحت موارد زیر را تایید کند:
+     1. شناسه تراکنش (`authority_token` و `id`) با رکورد پایگاه داده مطابقت داشته باشد.
+     2. مبلغ تاییدشده بانکی دقیقاً برابر با `amount_toman` سفارش باشد (جلوگیری از حملات Partial Amount Fraud).
+     3. شماره سفارش ارسالی به بانک دقیقاً با `order_id` در جدول سفارشات یکسان باشد.
+     4. مرجع بانکی (`shaparak_rrn`) یک رشته معتبر غیرخالی صادرشده توسط شاپرک باشد.
+3. **عدم واگذاری تایید پرداخت به کلاینت:**
+   هیچ کلاینت کاربری توانایی تایید پرداخت یا نهایی‌سازی سفارش را ندارد و هدایت کاربر به صفحه Callback صرفاً جهت اطلاع‌رسانی است؛ نهایی‌سازی مالی منحصراً از کانال وب‌هوک معتبر سروری صورت می‌پذیرد.

@@ -565,6 +565,8 @@
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | NOT NULL | `gen_random_uuid()` | کلید اصلی تراکنش |
 | `payment_id` | `UUID` | NOT NULL | — | ارجاع به `payments(id) ON DELETE RESTRICT` |
+| `parent_transaction_id`| `UUID` | NULL | — | ارجاع به تراکنش پرداخت اصلی در صورت استرداد؛ `payment_transactions(id) ON DELETE RESTRICT` |
+| `transaction_type`| `VARCHAR(20)`| NOT NULL | `'payment'` | نوع تراکنش: `'payment'`, `'refund'`, `'reversal'` |
 | `gateway` | `VARCHAR(50)` | NOT NULL | — | درگاه پرداختی: `'mellat'`, `'saman'`, `'zarinpal'`, `'sadad'`, `'system_refund_queue'` |
 | `amount_toman` | `BIGINT` | NOT NULL | — | **مبلغ ارسالی به درگاه پرداخت یا استرداد به تومان (BIGINT)** |
 | `authority_token`| `VARCHAR(100)`| NOT NULL | — | توکن دریافتی از بانک جهت ریدایرکت یا رهگیری استرداد |
@@ -573,7 +575,7 @@
 | `shaparak_rrn` | `VARCHAR(50)` | NULL | — | شماره ارجاع شاپرک (Retrieval Reference Number) |
 | `trace_number` | `VARCHAR(50)` | NULL | — | شماره پیگیری تراکنش در بانک صادرکننده |
 | `masked_pan` | `VARCHAR(20)` | NULL | — | شماره کارت ماسک‌شده مشتری |
-| `raw_response` | `JSONB` | NULL | — | رونوشت کامل پاسخ وب‌سرویس بانک همراه با شمارنده خطا و لاگ تلاش مجدد |
+| `raw_response` | `JSONB` | NULL | — | رونوشت کامل پاسخ وب‌سرویس بانک، آرایه تلاش‌ها (`refund_attempts`) و لاگ خطاها |
 | `created_at` | `TIMESTAMPTZ` | NOT NULL | `NOW()` | زمان هدایت کاربر به صفحه بانک یا ثبت درخواست استرداد |
 | `verified_at` | `TIMESTAMPTZ` | NULL | — | زمان استعلام و تایید نهایی تراکنش |
 

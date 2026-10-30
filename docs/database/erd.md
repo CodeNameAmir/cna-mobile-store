@@ -127,6 +127,12 @@ graph TD
 
 ## ۲. دیاگرام جزئی موجودیت‌های رابطه ای (Detailed Mermaid ERD)
 
+> [!NOTE]
+> **قاعده نام‌گذاری و شمارش جداول در دیاگرام‌ها:**
+> - **تعداد جداول تجاری اپلیکیشن:** دقیقاً **۴۸ جدول** در اسکیما `public` (شامل ۳۲ جدول فاز اول و ۱۶ جدول فاز دوم) مطابق با شناسنامه جدول Master Registry.
+> - **موجودیت احراز هویت خارجی:** جدول `auth.users` متعلق به اسکیما داخلی `auth` سوپابیس بوده و جدول اختصاصی CNA محسوب نمی‌شود، اما به عنوان مقصد کلیدهای خارجی در دیاگرام رسم شده است. به دلیل محدودیت نحوی سینتکس Mermaid در پذیرش علامت نقطه (`.`) در نام موجودیت‌ها، این جدول در دیاگرام زیر به صورت `auth_users` نام‌گذاری شده است.
+> - **مجموع موجودیت‌های رسم‌شده:** ۴۸ جدول اپلیکیشن + ۱ جدول هویتی پایه = مجموعاً ۴۹ موجودیت.
+
 ```mermaid
 erDiagram
     auth_users ||--|| profiles : "has profile"
@@ -154,6 +160,9 @@ erDiagram
     warehouses ||--o{ stock_movements : "logs inbound/outbound"
     product_variants ||--o{ stock_movements : "canonical ledger"
     product_variants ||--o{ stock_reservations : "temporarily holds"
+    warehouses ||--o{ inventory_transfers : "originates/receives"
+    inventory_transfers ||--o{ inventory_transfer_items : "contains items"
+    product_variants ||--o{ inventory_transfer_items : "transferred SKU"
 
     carts ||--o{ cart_items : "contains"
     product_variants ||--o{ cart_items : "added to cart"
@@ -170,6 +179,7 @@ erDiagram
     tax_rules ||--o{ orders : "applies versioned VAT"
     orders ||--o{ payments : "settled via"
     payments ||--o{ payment_transactions : "processed by IPG"
+    payment_transactions ||--o{ payment_transactions : "refund parent transaction"
 
     orders ||--o{ shipments : "dispatched as"
     shipping_methods ||--o{ shipments : "carrier method"
@@ -181,8 +191,15 @@ erDiagram
     products ||--o{ reviews : "reviewed by"
     profiles ||--o{ reviews : "authored by"
 
+    profiles ||--o{ wishlists : "bookmarks"
+    products ||--o{ wishlists : "bookmarked in"
+
     profiles ||--o{ support_tickets : "opened by"
     support_tickets ||--o{ ticket_messages : "contains messages"
+
+    auth_users ||--o{ loyalty_points : "accumulates"
+    auth_users ||--o{ notifications : "receives"
+    auth_users ||--o{ admin_audit_logs : "audited"
 ```
 
 ---

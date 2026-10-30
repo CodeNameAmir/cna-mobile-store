@@ -60,6 +60,7 @@
 | `invoices` | `order_id` | `orders` | `id` | `RESTRICT` | صورتحساب رسمی فروشگاه غیرقابل حذف است |
 | `payments` | `order_id` | `orders` | `id` | `RESTRICT` | پرونده پرداخت تسویه سفارش |
 | `payment_transactions` | `payment_id` | `payments` | `id` | `RESTRICT` | سند تراکنش درگاه پرداخت غیرقابل حذف است |
+| `payment_transactions` | `parent_transaction_id`| `payment_transactions` | `id` | `RESTRICT` | ارجاع تراکنش استرداد به تراکنش خرید اصلی جهت ممیزی و تطابق مبالغ |
 | `shipments` | `order_id` | `orders` | `id` | `RESTRICT` | بارنامه پستی کالا |
 | `shipment_tracking_events`| `shipment_id`| `shipments` | `id` | `CASCADE` | سوابق جابه‌جایی مرسوله پستی |
 | `coupon_usages` | `coupon_id` | `coupons` | `id` | `RESTRICT` | تاریخچه استناد به کدهای تخفیف |

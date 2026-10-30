@@ -102,6 +102,11 @@ ALTER TABLE tax_rules
 ALTER TABLE coupons 
   ADD CONSTRAINT chk_coupons_validity_dates 
   CHECK (valid_to >= valid_from);
+
+-- ۸. کنترل ساختاریافته نوع تراکنش پرداخت و استرداد
+ALTER TABLE payment_transactions 
+  ADD CONSTRAINT chk_payment_tx_type 
+  CHECK (transaction_type IN ('payment', 'refund', 'reversal'));
 ```
 
 ---
@@ -170,6 +175,8 @@ CREATE INDEX idx_order_items_order ON order_items(order_id);
 CREATE INDEX idx_order_items_variant ON order_items(variant_id);
 CREATE INDEX idx_payments_order ON payments(order_id);
 CREATE INDEX idx_payment_transactions_payment ON payment_transactions(payment_id);
+CREATE INDEX idx_payment_transactions_parent ON payment_transactions(parent_transaction_id);
+CREATE INDEX idx_payment_transactions_type ON payment_transactions(transaction_type, status);
 CREATE INDEX idx_warehouse_stock_variant ON warehouse_stock(variant_id);
 CREATE INDEX idx_stock_movements_variant ON stock_movements(variant_id);
 CREATE INDEX idx_wallet_transactions_wallet ON wallet_transactions(wallet_id);
