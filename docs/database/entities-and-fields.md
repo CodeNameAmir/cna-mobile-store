@@ -195,9 +195,6 @@
 ---
 
 ### ۳.۳. جدول `product_attribute_values` (مرجع قطعی و کانونیکال مشخصات فنی کالا)
-> [!IMPORTANT]
-> **Canonical Source of Truth:** این جدول تنها مرجع رسمی مقادیر مشخصات فنی است که فیلترهای بازه‌ای عددی و گزینه‌ای از روی آن ایندکس‌گذاری شده‌اند.
-
 | نام ستون | نوع داده | وضعیت Null | مقدار پیش‌فرض | توضیحات |
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | NOT NULL | `gen_random_uuid()` | کلید اصلی مقدار |
@@ -213,9 +210,6 @@
 ## ۴. تنوع کالا، گارانتی پویا و ردیابی شماره سریال IMEI (Variants & Serials)
 
 ### ۴.۱. جدول `warranties` (شرکت‌های ارائه‌دهنده گارانتی با مدت‌زمان پویا)
-> [!IMPORTANT]
-> **Configurable Warranty Duration:** مدت اعتبار گارانتی هرگز ثابت نبوده و با فیلد `duration_months` برای هر شرکت یا طرح به صورت پویا (۶، ۱۲، ۱۸، ۲۴، ۳۶ ماه) تنظیم می‌گردد.
-
 | نام ستون | نوع داده | وضعیت Null | مقدار پیش‌فرض | توضیحات |
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | NOT NULL | `gen_random_uuid()` | کلید اصلی گارانتی |
@@ -258,7 +252,7 @@
 | `variant_id` | `UUID` | NOT NULL | — | ارجاع به `product_variants(id) ON DELETE RESTRICT` |
 | `warehouse_id` | `UUID` | NOT NULL | — | ارجاع به `warehouses(id) ON DELETE RESTRICT` |
 | `imei1` | `VARCHAR(18)` | NOT NULL | — | شناسه ۱۵ رقمی IMEI اول دستگاه؛ `UNIQUE` |
-| `imei2` | `VARCHAR(18)` | NULL | — | شناسه ۱۵ رقمی IMEI دوم (برای گوشی‌های دوسیم‌کارت) |
+| `imei2` | `VARCHAR(18)` | NULL | — | شناسه ۱۵ رقمی IMEI دوم (برای مدل‌های دوسیم‌کارت) |
 | `serial_number` | `VARCHAR(50)` | NOT NULL | — | شماره سریال درج‌شده روی جعبه؛ `UNIQUE` |
 | `status` | `VARCHAR(20)` | NOT NULL | `'in_stock'` | وضعیت: `'in_stock'`, `'reserved'`, `'sold'`, `'defective'`, `'returned'` |
 | `order_item_id` | `UUID` | NULL | — | ارجاع به قلم سفارشی که این دستگاه به آن اختصاص یافته است |
@@ -290,9 +284,6 @@
 ---
 
 ### ۵.۲. جدول `warehouse_stock` (پروجکشن وضعیت موجودی در هر انبار)
-> [!IMPORTANT]
-> **Materialized Projection Only:** این جدول تنها یک پروجکشن ماتریالایزشده است؛ مرجع کانونیکال حقیقت `stock_movements` می‌باشد. تغییر مستقیم توسط کلاینت مسدود است.
-
 | نام ستون | نوع داده | وضعیت Null | مقدار پیش‌فرض | توضیحات |
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | NOT NULL | `gen_random_uuid()` | کلید اصلی پروجکشن موجودی |
@@ -308,9 +299,6 @@
 ---
 
 ### ۵.۳. جدول `stock_movements` (دفتر کل کانونیکال و تغییرناپذیر گردش انبار)
-> [!IMPORTANT]
-> **Canonical Immutable Ledger:** تمامی رویدادها شامل سند افتتاحیه موجودی (`opening_balance`)، اسناد جفتی انتقال و فاکتورها به صورت ضمیمه‌شدنی ثبت می‌شوند. تغییر مستقیم توسط کلاینت مسدود است.
-
 | نام ستون | نوع داده | وضعیت Null | مقدار پیش‌فرض | توضیحات |
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | NOT NULL | `gen_random_uuid()` | کلید اصلی سند گردش انبار |
@@ -321,8 +309,9 @@
 | `movement_type` | `VARCHAR(30)` | NOT NULL | — | نوع سند: `'opening_balance'`, `'purchase_inflow'`, `'order_sale'`, `'customer_return'`, `'transfer_out'`, `'transfer_in'`, `'inventory_audit_adjustment'` |
 | `reference_type`| `VARCHAR(30)` | NOT NULL | — | نام جدول مبدا: `'orders'`, `'inventory_transfers'`, `'order_returns'` |
 | `reference_id` | `UUID` | NULL | — | کلید شناسه رکورد مرتبط با سند |
-| `operator_id` | `UUID` | NOT NULL | — | کاربری که سند را ثبت کرده است (`auth.users(id)`) |
+| `operator_id` | `UUID` | NULL | — | کاربری که سند را ثبت کرده است (`auth.users(id)`) |
 | `notes` | `TEXT` | NULL | — | توضیحات انبارداری یا شماره فاکتور ورودی |
+| `idempotency_key`| `VARCHAR(100)`| NULL | — | **کلید ضدتکرار اسناد انبارداری جهت پیشگیری از سند مضاعف؛ `UNIQUE`** |
 | `created_at` | `TIMESTAMPTZ` | NOT NULL | `NOW()` | زمان دقیق ثبت قطعی سند در انبار |
 
 ---
@@ -479,7 +468,7 @@
 | `reason` | `VARCHAR(50)` | NOT NULL | — | علت: `defect`, `wrong_item`, `change_of_mind`, `damaged_in_transit` |
 | `customer_comment`| `TEXT` | NOT NULL | — | شرح تفصیلی مشکل از زبان مشتری |
 | `evidence_images` | `JSONB` | NOT NULL | `'[]'::jsonb` | تصاویر و ویدئوهای ارسالی مشتری |
-| `status` | `VARCHAR(20)` | NOT NULL | `'requested'` | وضعیت: `'requested'`, `'approved'`, `'shipped_back'`, `'inspected'`, `'refunded'`, `'rejected'` |
+| `status` | `VARCHAR(25)` | NOT NULL | `'requested'` | وضعیت: `'requested'`, `'approved'`, `'shipped_back'`, `'inspected'`, `'refund_pending'`, `'refund_failed'`, `'refunded'`, `'rejected'` |
 | `refund_amount_toman`| `BIGINT`| NOT NULL | `0` | **مبلغ تاییدشده استرداد به عدد صحیح تومان (BIGINT)** |
 | `serial_unit_id` | `UUID` | NULL | — | ارجاع به شناسه فیزیکی دستگاه عودت‌داده‌شده |
 | `resolved_by` | `UUID` | NULL | — | کارشناس فنی رسیدگی‌کننده |
@@ -506,9 +495,6 @@
 ---
 
 ### ۸.۲. جدول `wallets` (حساب‌های ریالی و کیف پول مشتریان)
-> [!IMPORTANT]
-> **Materialized Balance Projection Only:** مانده این جدول صرفاً کش ماتریالایزشده است؛ مرجع کانونیکال حقیقت `wallet_transactions` است. تغییر مستقیم توسط کلاینت مسدود است.
-
 | نام ستون | نوع داده | وضعیت Null | مقدار پیش‌فرض | توضیحات |
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | NOT NULL | `gen_random_uuid()` | کلید اصلی کیف پول |
@@ -522,9 +508,6 @@
 ---
 
 ### ۸.۳. جدول `wallet_transactions` (دفتر کل تراکنش‌های کیف پول - Canonical Sub-Ledger)
-> [!IMPORTANT]
-> **Canonical Wallet Ledger:** تمامی تراکنش‌های افزایش و کاهش به صورت اتمیک توسط تابع RPC در این جدول درج شده و مانده جدید محاسبه می‌گردد. تغییر مستقیم توسط کلاینت مسدود است.
-
 | نام ستون | نوع داده | وضعیت Null | مقدار پیش‌فرض | توضیحات |
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | NOT NULL | `gen_random_uuid()` | کلید اصلی سند تراکنش کیف پول |
@@ -536,6 +519,7 @@
 | `reference_type`| `VARCHAR(30)` | NULL | — | جدول مرتبط: `'orders'`, `'payments'`, `'order_returns'` |
 | `reference_id` | `UUID` | NULL | — | شناسه رکورد مرتبط |
 | `description_fa`| `TEXT` | NOT NULL | — | شرح فارسی سند |
+| `idempotency_key`| `VARCHAR(100)`| NULL | — | **کلید ضدتکرار تراکنش کیف پول؛ `UNIQUE`** |
 | `created_by` | `UUID` | NULL | — | ثبت‌کننده (سیستم یا ادمین مالی) |
 | `created_at` | `TIMESTAMPTZ` | NOT NULL | `NOW()` | زمان دقیق ثبت حسابداری تراکنش |
 
@@ -570,27 +554,27 @@
 | `user_id` | `UUID` | NOT NULL | — | ارجاع به `auth.users(id) ON DELETE RESTRICT` |
 | `amount_toman` | `BIGINT` | NOT NULL | — | **کل مبلغ الزامی جهت تسویه به عدد صحیح تومان (BIGINT)** |
 | `method` | `VARCHAR(30)` | NOT NULL | — | شیوه: `'online_ipg'`, `'wallet'`, `'installment'`, `'pos_on_delivery'` |
-| `status` | `VARCHAR(20)` | NOT NULL | `'pending'` | وضعیت: `'pending'`, `'completed'`, `'failed'`, `'refunded'`, `'refund_pending'` |
+| `status` | `VARCHAR(25)` | NOT NULL | `'pending'` | وضعیت: `'pending'`, `'completed'`, `'failed'`, `'refund_pending'`, `'refund_failed'`, `'refunded'` |
 | `created_at` | `TIMESTAMPTZ` | NOT NULL | `NOW()` | زمان ایجاد رکورد پرداخت |
 | `completed_at` | `TIMESTAMPTZ` | NULL | — | زمان تسویه موفق وجه |
 
 ---
 
-### ۸.۶. جدول `payment_transactions` (تراکنش‌های درگاه پرداخت)
+### ۸.۶. جدول `payment_transactions` (تراکنش‌های درگاه پرداخت و استرداد)
 | نام ستون | نوع داده | وضعیت Null | مقدار پیش‌فرض | توضیحات |
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | NOT NULL | `gen_random_uuid()` | کلید اصلی تراکنش |
 | `payment_id` | `UUID` | NOT NULL | — | ارجاع به `payments(id) ON DELETE RESTRICT` |
-| `gateway` | `VARCHAR(50)` | NOT NULL | — | درگاه پرداختی: `'mellat'`, `'saman'`, `'zarinpal'`, `'sadad'` |
-| `amount_toman` | `BIGINT` | NOT NULL | — | **مبلغ ارسالی به درگاه پرداخت به عدد صحیح تومان (BIGINT)** |
-| `authority_token`| `VARCHAR(100)`| NOT NULL | — | توکن دریافتی از بانک جهت ریدایرکت مشتری |
-| `idempotency_key`| `VARCHAR(100)`| NOT NULL | — | کلید یکتای ضدتکرار تراکنش |
+| `gateway` | `VARCHAR(50)` | NOT NULL | — | درگاه پرداختی: `'mellat'`, `'saman'`, `'zarinpal'`, `'sadad'`, `'system_refund_queue'` |
+| `amount_toman` | `BIGINT` | NOT NULL | — | **مبلغ ارسالی به درگاه پرداخت یا استرداد به تومان (BIGINT)** |
+| `authority_token`| `VARCHAR(100)`| NOT NULL | — | توکن دریافتی از بانک جهت ریدایرکت یا رهگیری استرداد |
+| `idempotency_key`| `VARCHAR(100)`| NOT NULL | — | کلید یکتای ضدتکرار تراکنش؛ `UNIQUE` |
 | `status` | `VARCHAR(20)` | NOT NULL | `'initiated'` | وضعیت: `'initiated'`, `'success'`, `'failed'`, `'verified'` |
 | `shaparak_rrn` | `VARCHAR(50)` | NULL | — | شماره ارجاع شاپرک (Retrieval Reference Number) |
 | `trace_number` | `VARCHAR(50)` | NULL | — | شماره پیگیری تراکنش در بانک صادرکننده |
 | `masked_pan` | `VARCHAR(20)` | NULL | — | شماره کارت ماسک‌شده مشتری |
-| `raw_response` | `JSONB` | NULL | — | رونوشت کامل پاسخ وب‌سرویس بانک |
-| `created_at` | `TIMESTAMPTZ` | NOT NULL | `NOW()` | زمان هدایت کاربر به صفحه بانک |
+| `raw_response` | `JSONB` | NULL | — | رونوشت کامل پاسخ وب‌سرویس بانک همراه با شمارنده خطا و لاگ تلاش مجدد |
+| `created_at` | `TIMESTAMPTZ` | NOT NULL | `NOW()` | زمان هدایت کاربر به صفحه بانک یا ثبت درخواست استرداد |
 | `verified_at` | `TIMESTAMPTZ` | NULL | — | زمان استعلام و تایید نهایی تراکنش |
 
 ---
@@ -776,8 +760,8 @@
 | نام ستون | نوع داده | وضعیت Null | مقدار پیش‌فرض | توضیحات |
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | NOT NULL | `gen_random_uuid()` | کلید اصلی رخداد لاگ |
-| `actor_id` | `UUID` | NOT NULL | — | ادمین انجام‌دهنده عملیات |
-| `action` | `VARCHAR(50)` | NOT NULL | — | نوع عملیات: `'price_change'`, `'stock_override'`, `'reconciliation_alert'`, `'late_payment_recovery'` |
+| `actor_id` | `UUID` | NULL | — | ادمین انجام‌دهنده عملیات یا شناسه سرویس سیستم |
+| `action` | `VARCHAR(50)` | NOT NULL | — | نوع عملیات: `'price_change'`, `'stock_override'`, `'reconciliation_alert'`, `'late_payment_stock_exhausted'` |
 | `target_entity` | `VARCHAR(50)` | NOT NULL | — | جدول تحت تاثیر |
 | `target_id` | `UUID` | NOT NULL | — | شناسه رکورد ویرایش‌شده |
 | `old_data` | `JSONB` | NULL | — | محتوای فیلدها قبل از تغییر |
