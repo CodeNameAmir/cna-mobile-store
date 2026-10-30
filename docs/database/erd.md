@@ -268,7 +268,7 @@ erDiagram
        │                │              │
        ▼ N              ▼ N            ▼ N
 ┌──────────────┐ ┌──────────────┐ ┌───────────────────────────┐
-│warehouse_stk │ │stock_movemnts│ │   product_serial_units    │
+│warehouse_stoc│ │stock_movement│ │   product_serial_units    │
 │───────────── │ │───────────── │ │ ───────────────────────── │
 │warehouse_id  │ │qty_change    │ │ id (UUID, PK)             │
 │variant_id    │ │balance_after │ │ variant_id (UUID, FK)     │

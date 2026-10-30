@@ -1,6 +1,6 @@
 # CNA Mobile Store — Database Implementation & Phased Execution Plan (Task 4.3 Roadmap)
 
-برنامه عملیاتی و نقشه راه گام‌به‌گام پیاده‌سازی فیزیکی اسکیما، مهاجرت داده‌های اولیه (Data Seeding)، آزمون‌های اعتبارسنجی امنیتی و برنامه‌های بازگشت (Rollback Plan) در تسک ۴.۳.
+برنامه عملیاتی و نقشه راه گام‌به‌گام پیاده‌سازی فیزیکی اسکیما، مهاجرت داده‌های اولیه (Data Seeding)، آزمون‌های اعتبارسنجی امنیتی و استراتژی بازگشت امن و تفکیک‌شده (Safe Rollback Strategy) در تسک ۴.۳.
 
 ---
 
@@ -35,7 +35,7 @@
 │   - انبارداری: warehouses, warehouse_stock (پروجکشن),                  │
 │     stock_movements (دفتر کل کانونیکال با سند افتتاحیه و اسناد جفتی),  │
 │     stock_reservations (رزرو اتمیک ۱۵ دقیقه‌ای)                        │
-│   - توابع انحصاری انبارداری: rpc_record_stock_movement()               │
+│   - توابع انحصاری انبارداری با قفل بدبینانه: rpc_record_stock_movement()│
 │   - سبد خرید: carts, cart_items                                        │
 │   - توالی‌های شماره سفارش با سال پویا: cna_order_number_seq            │
 │   - سفارشات: orders (با وضعیت بازیابی دیرهنگام), order_items, تاریخچه   │
@@ -47,7 +47,8 @@
 │   - موتور مالیاتی و کیف پول: tax_rules, wallets (پروجکشن),              │
 │     wallet_transactions (دفتر کل کانونیکال با rpc_post_wallet_tx)      │
 │   - فاکتور رسمی و پرداخت: invoices, payments, payment_transactions     │
-│   - روال بازیابی دیرهنگام پرداخت: rpc_handle_late_payment_callback()   │
+│   - روال بازیابی دیرهنگام و استرداد وجه پایاپای:                       │
+│     rpc_handle_late_payment_callback(), rpc_process_gateway_refund()   │
 │   - حمل و نقل و تنظیمات: shipping_methods, store_settings               │
 │   - فعال‌سازی سراسری RLS و اعمال سیاست‌های انسداد کلاینت برای دفاتر کل │
 └────────────────────────────────────────────────────────────────────────┘
@@ -129,7 +130,7 @@
 
 | شماره تست | عنوان آزمون | سناریو و شرایط قبولی | ابزار ارزیابی |
 | :--- | :--- | :--- | :--- |
-| **TEST-01** | شمارش صحت جداول | بررسی ایجاد کامل جداول در اسکیما `public` | کوئری `information_schema.tables` |
+| **TEST-01** | شمارش صحت جداول | بررسی ایجاد کامل جداول در اسکیما `public` (دقیقاً ۳۲ جدول در فاز اول) | کوئری `information_schema.tables` |
 | **TEST-02** | راستی‌آزمایی RLS | اطمینان از مقدار `rowsecurity = true` در تمام جداول | کوئری `pg_tables` |
 | **TEST-03** | اعتبارسنجی ارزی | اطمینان از نبود فیلدهای `FLOAT` یا `DOUBLE` در ستون‌های مالی (الزام `BIGINT`) | کوئری `information_schema.columns` |
 | **TEST-04** | انسداد تغییر مستقیم انبار | تلاش برای صدور `INSERT` روی `stock_movements` توسط کلاینت (باید خطای ۴۰۳ دهد) | استعلام کلاینت با کلید عمومی |
@@ -138,17 +139,95 @@
 | **TEST-07** | توالی پویای شماره سفارش | ایجاد سفارش جدید و تایید فرمت با سال پویا (مثال: `CNA-2026-10001`) | تست تریگر توالی |
 | **TEST-08** | همگام‌سازی کانونیکال مشخصات | ویرایش مقدار در `product_attribute_values` و مشاهده به‌روزرسانی `specs_summary` | تست تریگر کاتالوگ |
 | **TEST-09** | تست بازیابی پرداخت دیرهنگام | تست فراخوانی `rpc_handle_late_payment_callback` برای رزرو منقضی با موجودی صفر (تایید استرداد بدون بیش‌فروشی) | اجرای تست روال ذخیره‌شده |
+| **TEST-10** | تست پایاپای استرداد وجه | فراخوانی مکرر `rpc_process_gateway_refund` با کلید ضدتکرار یکسان (عدم پردازش مجدد) | اجرای تست روال ذخیره‌شده |
 
 ---
 
-## ۵. استراتژی بازگشت به وضعیت قبل (Rollback Procedures)
+## ۵. استراتژی بازگشت امن و تفکیک‌شده بر حسب محیط (Environment-Safe Rollback Strategy)
+
+> [!WARNING]
+> **ممنوعیت مطلق حذف کلی اسکیما در پروداکشن:**
+> اجرای دستورات تخریبی نظیر `DROP SCHEMA public CASCADE;` در محیط‌های عملیاتی (Production) و پیش‌تولید (Staging) اکیداً ممنوع است. هرگونه بازگشت در این محیط‌ها باید منحصراً از طریق اسکریپت‌های برگشت فازبه‌فاز (`down.sql`) اجرا شود تا تمامیت داده‌های تجاری و سوابق مشتریان حفظ گردد.
+
+### ۵.۱. استراتژی بازگشت فازبه‌فاز در محیط پروداکشن (Granular Phase-by-Phase Rollback)
+برای هر مرحله از مایگریشن، اسکریپت برگشت معکوس تعریف شده و در یک ترنزکشن امن اجرا می‌شود:
 
 ```sql
--- اسکریپت پاکسازی اضطراری در محیط توسعه
-DROP SCHEMA IF EXISTS public CASCADE;
-CREATE SCHEMA public;
-GRANT ALL ON SCHEMA public TO postgres;
-GRANT ALL ON SCHEMA public TO anon;
-GRANT ALL ON SCHEMA public TO authenticated;
-GRANT ALL ON SCHEMA public TO service_role;
+-- برگشت فاز ۴ (Finance, Shipping, Settings & RLS)
+BEGIN;
+  DROP FUNCTION IF EXISTS rpc_process_gateway_refund;
+  DROP FUNCTION IF EXISTS rpc_handle_late_payment_callback;
+  DROP FUNCTION IF EXISTS rpc_post_wallet_transaction;
+  DROP TABLE IF EXISTS payment_transactions CASCADE;
+  DROP TABLE IF EXISTS payments CASCADE;
+  DROP TABLE IF EXISTS invoices CASCADE;
+  DROP TABLE IF EXISTS wallet_transactions CASCADE;
+  DROP TABLE IF EXISTS wallets CASCADE;
+  DROP TABLE IF EXISTS tax_rules CASCADE;
+  DROP TABLE IF EXISTS shipping_methods CASCADE;
+  DROP TABLE IF EXISTS store_settings CASCADE;
+COMMIT;
+
+-- برگشت فاز ۳ (Multi-Warehouse, Carts & Orders)
+BEGIN;
+  DROP FUNCTION IF EXISTS rpc_record_stock_movement;
+  DROP FUNCTION IF EXISTS rpc_checkout_order;
+  DROP TRIGGER IF EXISTS trg_set_cna_order_number ON orders;
+  DROP FUNCTION IF EXISTS generate_cna_order_number;
+  DROP SEQUENCE IF EXISTS cna_order_number_seq;
+  DROP TABLE IF EXISTS order_status_history CASCADE;
+  DROP TABLE IF EXISTS order_items CASCADE;
+  DROP TABLE IF EXISTS orders CASCADE;
+  DROP TABLE IF EXISTS cart_items CASCADE;
+  DROP TABLE IF EXISTS carts CASCADE;
+  DROP TABLE IF EXISTS stock_reservations CASCADE;
+  DROP TABLE IF EXISTS stock_movements CASCADE;
+  DROP TABLE IF EXISTS warehouse_stock CASCADE;
+  DROP TABLE IF EXISTS warehouses CASCADE;
+COMMIT;
+
+-- برگشت فاز ۲ (Catalog & Taxonomy)
+BEGIN;
+  DROP TABLE IF EXISTS product_variants CASCADE;
+  DROP TABLE IF EXISTS warranties CASCADE;
+  DROP TABLE IF EXISTS product_attribute_values CASCADE;
+  DROP TABLE IF EXISTS category_attributes CASCADE;
+  DROP TABLE IF EXISTS attribute_definitions CASCADE;
+  DROP TABLE IF EXISTS product_images CASCADE;
+  DROP TABLE IF EXISTS products CASCADE;
+  DROP TABLE IF EXISTS brands CASCADE;
+  DROP TABLE IF EXISTS categories CASCADE;
+COMMIT;
+
+-- برگشت فاز ۱ (Foundation & RBAC)
+BEGIN;
+  DROP FUNCTION IF EXISTS auth.user_has_permission;
+  DROP FUNCTION IF EXISTS auth.user_has_role;
+  DROP TABLE IF EXISTS user_addresses CASCADE;
+  DROP TABLE IF EXISTS auth_user_roles CASCADE;
+  DROP TABLE IF EXISTS auth_role_permissions CASCADE;
+  DROP TABLE IF EXISTS auth_permissions CASCADE;
+  DROP TABLE IF EXISTS auth_roles CASCADE;
+  DROP TABLE IF EXISTS profiles CASCADE;
+COMMIT;
+```
+
+### ۵.۲. پاکسازی صرفاً در سندباکس توسعه محلی با گارد ایمنی (Local Dev Sandbox Only)
+در محیط توسعه محلی، اسکریپت ریست تنها در صورت وجود تاییدیه صریح متغیر محیطی اجرا می‌گردد:
+
+```sql
+DO $$
+BEGIN
+    -- بررسی گارد ایمنی محیط توسعه
+    IF current_setting('app.environment', true) <> 'development' THEN
+        RAISE EXCEPTION 'خطای امنیتی: دستور پاکسازی کلی اسکیما منحصراً در محیط development مجاز است.';
+    END IF;
+
+    DROP SCHEMA IF EXISTS public CASCADE;
+    CREATE SCHEMA public;
+    GRANT ALL ON SCHEMA public TO postgres;
+    GRANT ALL ON SCHEMA public TO anon;
+    GRANT ALL ON SCHEMA public TO authenticated;
+    GRANT ALL ON SCHEMA public TO service_role;
+END $$;
 ```

@@ -1,6 +1,6 @@
 # CNA Mobile Store — Constraints, Sequences & Indexing Strategy
 
-مستندات مهندسی محدودیت‌های یکتایی، چک کانستارینت‌های اعتبارسنجی داده، ایندکس‌های بهینه‌ساز B-Tree، ایندکس‌های فیلترشده (Partial)، جستجوی تمام‌متن فارسی (GIN) و مکانیزم تولید ایمن شماره سفارشات با سال پویا.
+مستندات مهندسی محدودیت‌های یکتایی، چک کانستارینت‌های اعتبارسنجی داده، ایندکس‌های بهینه‌ساز B-Tree، ایندکس‌های فیلترشده (Partial)، جستجوی تمام‌متن فارسی (GIN)، کلیدهای ضدتکرار (Idempotency) و مکانیزم تولید ایمن شماره سفارشات با سال پویا.
 
 ---
 
@@ -9,9 +9,9 @@
 ### ۱.۱. کلیدهای اصلی تک‌ستونی (Single-Column Primary Keys)
 تمامی جداول به استثنای جداول واسط خالص N:M، دارای کلید اصلی `id` از نوع `UUID` با پیش‌فرض `gen_random_uuid()` هستند تا از حملات حدس عددی (ID Enumeration Attacks) جلوگیری شود.
 
-### ۱.۲. محدودیت‌های یکتایی تجاری (Business Unique Constraints)
+### ۱.۲. محدودیت‌های یکتایی تجاری و کلیدهای ضدتکرار (Business & Idempotency Unique Constraints)
 
-| نام جدول | ستون(های) یکتا | نام ایندکس یکتا | توجیه بیزینسی |
+| نام جدول | ستون(های) یکتا | نام ایندکس یکتا | توجیه بیزینسی و امنیتی |
 | :--- | :--- | :--- | :--- |
 | `profiles` | `phone` | `uq_profiles_phone` | هر شماره همراه منحصراً متعلق به یک حساب کاربری است |
 | `auth_roles` | `name` | `uq_auth_roles_name` | جلوگیری از تعریف نام تکراری برای نقش‌های سیستمی |
@@ -29,6 +29,8 @@
 | `invoices` | `invoice_number`| `uq_invoices_invoice_number` | شماره رسمی صورتحساب فروشگاه |
 | `invoices` | `order_id` | `uq_invoices_order_id` | هر سفارش دقیقاً یک صورتحساب رسمی دارد |
 | `wallets` | `user_id` | `uq_wallets_user_id` | هر کاربر حداکثر یک کیف پول اعتباری دارد |
+| `wallet_transactions` | `idempotency_key`| `uq_wallet_tx_idemp` | **کلید ضدتکرار تراکنش‌های کیف پول جهت پیشگیری از سند تکراری** |
+| `stock_movements` | `idempotency_key`| `uq_stock_movements_idemp` | **کلید ضدتکرار اسناد انبار جهت پیشگیری از ورود یا خروج مضاعف** |
 | `payment_transactions` | `idempotency_key`| `uq_payment_tx_idemp` | جلوگیری از ارسال تراکنش تکراری به درگاه |
 | `payment_webhook_logs` | `idempotency_key`| `uq_payment_webhooks_idemp` | جلوگیری از پردازش مضاعف وب‌هوک‌های ارسالی بانک |
 | `shipping_methods` | `code` | `uq_shipping_methods_code` | کد متد ارسال (مانند `tipax`, `express_tehran`) |
@@ -106,8 +108,6 @@ ALTER TABLE coupons
 
 ## ۳. تولید پویا، ایمن و ضدتداخل شماره سفارشات و فاکتورها (Thread-Safe Sequences with Dynamic Year)
 
-برای شماره سفارشاتی نظیر `CNA-2026-10001` یا سال خورشیدی جاری، هیچ مقدار ثابتی هاردکد نمی‌شود. یک توالی پایگاه داده در سطح PostgreSQL همراه با استخراج پویای سال این شناسه را به شکل اتمیک تولید می‌کند:
-
 ```sql
 -- ایجاد توالی‌های مستقل در پایگاه داده
 CREATE SEQUENCE IF NOT EXISTS cna_order_number_seq START WITH 10001 INCREMENT BY 1;
@@ -120,7 +120,6 @@ DECLARE
     dynamic_year VARCHAR(4);
     seq_val BIGINT;
 BEGIN
-    -- استخراج پویای سال جاری از زمان سیستم
     dynamic_year := TO_CHAR(NOW(), 'YYYY');
     seq_val := nextval('cna_order_number_seq');
     NEW.order_number := 'CNA-' || dynamic_year || '-' || seq_val::TEXT;
@@ -128,7 +127,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- تریگر تخصیص خودکار در زمان ایجاد سفارش
 CREATE TRIGGER trg_set_cna_order_number
 BEFORE INSERT ON orders
 FOR EACH ROW
@@ -161,7 +159,6 @@ EXECUTE FUNCTION generate_cna_invoice_number();
 ## ۴. استراتژی ایندکس‌گذاری جامع (Indexing Architecture)
 
 ### ۴.۱. ایندکس‌های کلید خارجی جهت شتاب‌بخشی به Joinها و جلوگیری از Table Scan
-تمامی ستون‌های کلید خارجی که در کوئری‌های جوین کاربرد دارند به صورت صریح با B-Tree ایندکس‌گذاری می‌شوند:
 ```sql
 CREATE INDEX idx_products_category ON products(category_id);
 CREATE INDEX idx_products_brand ON products(brand_id);

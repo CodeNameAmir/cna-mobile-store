@@ -101,6 +101,12 @@
 9. **`payments ↔ payment_transactions`**: هر پرونده پرداخت ممکن است شامل چند تلاش درگاه باشد.
 10. **`wallets ↔ wallet_transactions`**: هر کیف پول دارای تاریخچه‌ای از تراکنش‌های واریز و برداشت است.
 
+### روابط چندبه‌چند (N:M Relationships via Junction Tables)
+1. **`auth_roles ↔ auth_permissions` (واسط: `auth_role_permissions`)**: هر نقش چندین مجوز دارد و هر مجوز در چندین نقش تکرار می‌شود.
+2. **`auth.users ↔ auth_roles` (واسط: `auth_user_roles`)**: یک پرسنل می‌تواند چند نقش کاربری داشته باشد.
+3. **`categories ↔ attribute_definitions` (واسط: `category_attributes`)**: دسته‌بندی موبایل به ویژگی‌های رم، حافظه، باتری و دوربین متصل است.
+4. **`products ↔ attribute_definitions` (واسط: `product_attribute_values`)**: ذخیره‌سازی کانونیکال مقدار هر ویژگی برای هر محصول.
+
 ---
 
 ## ۴. اثبات انطباق با فرم‌های نرمال‌سازی (Normalization Proof)
