@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { useAdminData } from '../../context/AdminDataContext';
 import { StoreSettings } from '../../types/admin';
 import { toPersianDigits } from '../../utils/formatters';
+import { DatabaseDiagnosticsPanel } from '../../components/admin/diagnostics/DatabaseDiagnosticsPanel';
 
 export const AdminSettingsPage: React.FC = () => {
   const { settings, updateSettings, showToast } = useAdminData();
 
-  const [activeTab, setActiveTab] = useState<'general' | 'payments' | 'shipping' | 'sms' | 'security'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'payments' | 'shipping' | 'sms' | 'security' | 'database'>('general');
 
   // Local form state initialized from context
   const [formData, setFormData] = useState<StoreSettings>({ ...settings });
@@ -118,6 +119,18 @@ export const AdminSettingsPage: React.FC = () => {
         >
           <span className="material-symbols-outlined text-[20px]">security</span>
           <span>امنیت و نشست‌ها</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('database')}
+          className={`flex items-center gap-2 px-5 py-3 rounded-xl font-label-lg transition-all shrink-0 ${
+            activeTab === 'database'
+              ? 'bg-primary-container text-on-primary font-bold shadow-sm'
+              : 'bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[20px]">database</span>
+          <span>پایگاه داده و سرویس ابری</span>
         </button>
       </div>
 
@@ -482,6 +495,11 @@ export const AdminSettingsPage: React.FC = () => {
               </span>
             </div>
           </div>
+        )}
+
+        {/* Tab 6: Database & Cloud Infrastructure */}
+        {activeTab === 'database' && (
+          <DatabaseDiagnosticsPanel />
         )}
 
         {/* Save Footer Bar */}
