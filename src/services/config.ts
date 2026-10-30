@@ -12,18 +12,35 @@ export interface ConfigValidationResult {
   isValid: boolean;
   urlValid: boolean;
   keyValid: boolean;
+  dataSourceValid: boolean;
   error?: string;
   urlError?: string;
   keyError?: string;
+  dataSourceError?: string;
 }
 
-// 1. Data Source Selection
-const rawDataSource = (
-  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_DATA_SOURCE) ||
-  'mock'
-).toString().trim().toLowerCase();
+// 1. Data Source Selection (Strict validation)
+// Unset or empty -> defaults to 'mock'.
+// Accept only 'mock' or 'supabase'. Any other non-empty value triggers a configuration error.
+const rawDataSourceEnv = (
+  typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_DATA_SOURCE !== undefined
+    ? String(import.meta.env.VITE_DATA_SOURCE).trim()
+    : ''
+);
 
-export const DATA_SOURCE: DataSourceType = rawDataSource === 'supabase' ? 'supabase' : 'mock';
+export const RAW_DATA_SOURCE: string = rawDataSourceEnv;
+
+const normalizedSource = rawDataSourceEnv.toLowerCase();
+
+export const IS_DATA_SOURCE_VALID: boolean =
+  normalizedSource === '' || normalizedSource === 'mock' || normalizedSource === 'supabase';
+
+export const DATA_SOURCE_ERROR: string | undefined = !IS_DATA_SOURCE_VALID
+  ? `مقدار VITE_DATA_SOURCE نامعتبر است: "${rawDataSourceEnv}". تنها مقادیر مجاز "mock" یا "supabase" می‌باشند.`
+  : undefined;
+
+// Export active DATA_SOURCE. If invalid, keep 'mock' as runtime type fallback while exposing error in validateSupabaseConfig.
+export const DATA_SOURCE: DataSourceType = normalizedSource === 'supabase' ? 'supabase' : 'mock';
 
 // 2. Production Environment Check
 export const IS_PRODUCTION: boolean =
@@ -138,6 +155,19 @@ export function validateSupabaseConfig(): ConfigValidationResult {
   const urlRes = validateSupabaseUrl(SUPABASE_URL, IS_PRODUCTION);
   const keyRes = validateSupabaseKey(SUPABASE_PUBLIC_KEY);
 
+  if (!IS_DATA_SOURCE_VALID) {
+    return {
+      isValid: false,
+      urlValid: urlRes.isValid,
+      keyValid: keyRes.isValid,
+      dataSourceValid: false,
+      error: DATA_SOURCE_ERROR,
+      urlError: urlRes.error,
+      keyError: keyRes.error,
+      dataSourceError: DATA_SOURCE_ERROR,
+    };
+  }
+
   const isValid = urlRes.isValid && keyRes.isValid;
   let generalError: string | undefined = undefined;
 
@@ -153,6 +183,7 @@ export function validateSupabaseConfig(): ConfigValidationResult {
     isValid,
     urlValid: urlRes.isValid,
     keyValid: keyRes.isValid,
+    dataSourceValid: true,
     error: generalError,
     urlError: urlRes.error,
     keyError: keyRes.error,

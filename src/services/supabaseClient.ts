@@ -4,19 +4,23 @@
  * Implements a strict module-level Singleton pattern:
  * - Prevents redundant client instances, isolated sessions, and extraneous auth listeners.
  * - Enforces explicit, intelligible errors when DATA_SOURCE is 'supabase' and variables are missing.
- * - Prevents instantiation with empty or invalid URLs/keys.
+ * - Prevents instantiation with empty or invalid URLs/keys or invalid VITE_DATA_SOURCE values.
  * - Provides multi-stage diagnostics (Config -> Auth Health -> REST API status -> DB Query deferred).
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
   DATA_SOURCE,
+  RAW_DATA_SOURCE,
+  IS_DATA_SOURCE_VALID,
+  DATA_SOURCE_ERROR,
   SUPABASE_URL,
   SUPABASE_PUBLIC_KEY,
   SUPABASE_KEY_TYPE,
   validateSupabaseConfig,
   isSupabaseConfigured,
   SupabaseKeyType,
+  DataSourceType,
 } from './config';
 
 // Module-level Singleton
@@ -24,11 +28,18 @@ let supabaseInstance: SupabaseClient | null = null;
 
 /**
  * Returns the centralized Supabase client instance.
- * Throws explicit descriptive error if DATA_SOURCE is 'supabase' but environment is not configured.
+ * Throws explicit descriptive error if DATA_SOURCE is 'supabase' but environment is not configured,
+ * or if VITE_DATA_SOURCE is set to an unknown/invalid value.
  */
 export function getSupabaseClient(): SupabaseClient {
   if (supabaseInstance) {
     return supabaseInstance;
+  }
+
+  if (!IS_DATA_SOURCE_VALID) {
+    throw new Error(
+      `[CNA Supabase] خطای پیکربندی: ${DATA_SOURCE_ERROR}`
+    );
   }
 
   const config = validateSupabaseConfig();
@@ -121,7 +132,9 @@ export interface Stage4DbResult {
 
 export interface FullDiagnosticReport {
   timestamp: string;
-  dataSource: 'mock' | 'supabase';
+  dataSource: DataSourceType;
+  rawDataSource: string;
+  isDataSourceValid: boolean;
   stage1Config: Stage1ConfigResult;
   stage2Auth: Stage2AuthResult;
   stage3Rest: Stage3RestResult;
@@ -132,6 +145,9 @@ export interface FullDiagnosticReport {
  * Stage 2: Tests Auth API Health
  * Sends a GET request to ${SUPABASE_URL}/auth/v1/health with 'apikey' header and 5-second timeout.
  * Validates HTTP 200, parses JSON, and verifies name === 'GoTrue' and a valid version string.
+ * Keeps timeout active during both network transmission and body parsing.
+ * Clears timeout in a finally block to eliminate timer leaks.
+ * Classifies malformed JSON as INVALID_PAYLOAD.
  */
 export async function testAuthHealth(timeoutMs: number = 5000): Promise<Stage2AuthResult> {
   const config = validateSupabaseConfig();
@@ -139,7 +155,9 @@ export async function testAuthHealth(timeoutMs: number = 5000): Promise<Stage2Au
     return {
       status: 'SKIPPED',
       errorType: 'CONFIG_ERROR',
-      message: 'آزمون Auth API به دلیل عدم وجود یا نامعتبر بودن تنظیمات اولیه انجام نشد.',
+      message: config.dataSourceError
+        ? `آزمون Auth API به دلیل خطای پیکربندی منبع داده انجام نشد: ${config.dataSourceError}`
+        : 'آزمون Auth API به دلیل عدم وجود یا نامعتبر بودن تنظیمات اولیه انجام نشد.',
     };
   }
 
@@ -159,45 +177,51 @@ export async function testAuthHealth(timeoutMs: number = 5000): Promise<Stage2Au
       signal: controller.signal,
     });
 
-    clearTimeout(timeoutId);
-    const latencyMs = Math.round(performance.now() - startTime);
-
     if (!response.ok) {
       return {
         status: 'FAILED',
-        latencyMs,
+        latencyMs: Math.round(performance.now() - startTime),
         errorType: 'HTTP_STATUS_ERROR',
         message: `سرویس Auth با کد وضعیت HTTP ${response.status} (${response.statusText || 'خطای سرور'}) پاسخ داد.`,
       };
     }
 
-    const payload = await response.json();
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      return {
+        status: 'FAILED',
+        latencyMs: Math.round(performance.now() - startTime),
+        errorType: 'INVALID_PAYLOAD',
+        message: 'محتوای پاسخ اندپوینت سلامت فاقد قالب معتبر JSON بود (خطای تجزیه داده).',
+      };
+    }
 
     // Verify response content: name must be 'GoTrue' and version must be non-empty string
     if (
       payload &&
       typeof payload === 'object' &&
-      payload.name === 'GoTrue' &&
-      typeof payload.version === 'string' &&
-      payload.version.trim().length > 0
+      (payload as Record<string, unknown>).name === 'GoTrue' &&
+      typeof (payload as Record<string, unknown>).version === 'string' &&
+      ((payload as Record<string, unknown>).version as string).trim().length > 0
     ) {
       return {
         status: 'SUCCESS',
-        latencyMs,
-        serviceName: payload.name,
-        version: payload.version,
-        message: `سرویس احراز هویت (${payload.name} نسخه ${payload.version}) در دسترس و عملیاتی است.`,
+        latencyMs: Math.round(performance.now() - startTime),
+        serviceName: (payload as Record<string, unknown>).name as string,
+        version: (payload as Record<string, unknown>).version as string,
+        message: `سرویس احراز هویت (${(payload as Record<string, unknown>).name} نسخه ${(payload as Record<string, unknown>).version}) در دسترس و عملیاتی است.`,
       };
     }
 
     return {
       status: 'FAILED',
-      latencyMs,
+      latencyMs: Math.round(performance.now() - startTime),
       errorType: 'INVALID_PAYLOAD',
       message: 'پاسخ اندپوینت سلامت فاقد ساختار استاندارد GoTrue یا نسخه معتبر بود.',
     };
   } catch (err: unknown) {
-    clearTimeout(timeoutId);
     const latencyMs = Math.round(performance.now() - startTime);
 
     if (err instanceof DOMException && err.name === 'AbortError') {
@@ -206,6 +230,15 @@ export async function testAuthHealth(timeoutMs: number = 5000): Promise<Stage2Au
         latencyMs,
         errorType: 'TIMEOUT',
         message: `پاسخی در مهلت مقرر (${timeoutMs / 1000} ثانیه) از سرور Auth دریافت نشد (خطای وقفه زمانی).`,
+      };
+    }
+
+    if (err instanceof SyntaxError) {
+      return {
+        status: 'FAILED',
+        latencyMs,
+        errorType: 'INVALID_PAYLOAD',
+        message: `محتوای پاسخ اندپوینت سلامت فاقد ساختار معتبر JSON بود: ${err.message}`,
       };
     }
 
@@ -226,6 +259,8 @@ export async function testAuthHealth(timeoutMs: number = 5000): Promise<Stage2Au
       errorType: 'NETWORK_OR_CORS_ERROR',
       message: `خطای ارتباطی با وب‌سرویس احراز هویت: ${msg}`,
     };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -260,7 +295,9 @@ export async function runSupabaseDiagnostics(): Promise<FullDiagnosticReport> {
     : {
         status: 'SKIPPED',
         errorType: 'CONFIG_ERROR',
-        message: 'آزمون Auth API به دلیل عدم وجود تنظیمات معتبر انجام نشد.',
+        message: config.dataSourceError
+          ? `آزمون Auth API به دلیل خطای منبع داده انجام نشد: ${config.dataSourceError}`
+          : 'آزمون Auth API به دلیل عدم وجود تنظیمات معتبر انجام نشد.',
       };
 
   // Stage 3: REST API Availability (Honestly marked as NOT TESTABLE YET in Task 4.1)
@@ -279,6 +316,8 @@ export async function runSupabaseDiagnostics(): Promise<FullDiagnosticReport> {
   const report: FullDiagnosticReport = {
     timestamp: new Date().toISOString(),
     dataSource: DATA_SOURCE,
+    rawDataSource: RAW_DATA_SOURCE,
+    isDataSourceValid: IS_DATA_SOURCE_VALID,
     stage1Config,
     stage2Auth,
     stage3Rest,
@@ -295,7 +334,7 @@ if (typeof window !== 'undefined' && typeof import.meta !== 'undefined' && impor
     const report = await runSupabaseDiagnostics();
     console.group('📋 گزارش وضعیت ارتباطی Supabase (Task 4.1)');
     console.info('🕒 زمان آزمون:', report.timestamp);
-    console.info('⚙️ منبع داده فعلی:', report.dataSource);
+    console.info('⚙️ منبع داده فعلی:', report.dataSource, report.isDataSourceValid ? '' : `(نامعتبر: ${report.rawDataSource})`);
     console.info('🌐 دامنه سرور:', report.stage1Config.urlHost || 'تنظیم نشده');
     console.info('🔑 نوع کلید عمومی:', report.stage1Config.keyType);
     console.info('1️⃣ اعتبارسنجی کانفیگ:', report.stage1Config.isValid ? '✅ تایید' : `❌ ${report.stage1Config.error}`);

@@ -6,6 +6,9 @@ import {
 } from '../../../services/supabaseClient';
 import {
   DATA_SOURCE,
+  RAW_DATA_SOURCE,
+  IS_DATA_SOURCE_VALID,
+  DATA_SOURCE_ERROR,
   SUPABASE_URL,
   SUPABASE_KEY_TYPE,
   SUPABASE_PUBLIC_KEY,
@@ -116,15 +119,21 @@ export const DatabaseDiagnosticsPanel: React.FC = () => {
           <div className="flex items-center gap-2 mt-1">
             <span
               className={`w-2.5 h-2.5 rounded-full ${
-                DATA_SOURCE === 'supabase' ? 'bg-primary' : 'bg-amber-500'
+                !IS_DATA_SOURCE_VALID
+                  ? 'bg-rose-500'
+                  : DATA_SOURCE === 'supabase'
+                  ? 'bg-primary'
+                  : 'bg-amber-500'
               }`}
             ></span>
             <span className="font-mono text-base font-bold text-on-surface uppercase">
-              {DATA_SOURCE}
+              {!IS_DATA_SOURCE_VALID ? RAW_DATA_SOURCE || 'نامعتبر' : DATA_SOURCE}
             </span>
           </div>
           <p className="text-[11px] text-on-surface-variant leading-relaxed">
-            {DATA_SOURCE === 'supabase'
+            {!IS_DATA_SOURCE_VALID
+              ? DATA_SOURCE_ERROR
+              : DATA_SOURCE === 'supabase'
               ? 'پروژه به صورت زنده به سرویس ابری متصل است.'
               : 'پروژه در حالت داده‌های محلی (Mock) اجرا می‌شود.'}
           </p>
