@@ -1,105 +1,81 @@
-# Task 4.1 — آماده‌سازی زیرساخت ارتباطی Supabase (نسخه نهایی ۴)
+# Task 4.2 — Complete Database Architecture Design for CNA (Final Master Plan)
 
-طرح معماری و برنامه اجرایی قطعی گام ۴.۱ جهت استقرار زیرساخت استاندارد و مینیمال کلاینت Supabase در پروژه فروشگاه اینترنتی سی‌ان‌ای موبایل (CNA Mobile Store)، با اعمال ۳ اصلاحیه تکمیلی نهایی.
+Authoritative architectural specification and technical blueprint for CNA Mobile Store's production-grade relational database on Supabase (PostgreSQL), incorporating Iranian e-commerce requirements, strict integer Toman currency, multi-warehouse inventory, and enterprise-grade Row-Level Security (RLS).
 
 ---
 
 ### User Review & Critical Decisions
 
 > [!IMPORTANT]
-> **اصلاحات و الزامات قطعی نهایی:**
-> 1. **بررسی عمیق محتوای پاسخ Auth API:** در استعلام GET به `/auth/v1/health`، علاوه بر HTTP 200 و JSON معتبر، محتوای پاسخ اعتبارسنجی می‌شود؛ فیلد `name` باید دقیقاً برابر `'GoTrue'` و فیلد `version` باید یک رشته غیرخالی باشد.
-> 2. **اعتبارسنجی بدون طول شکننده برای کلید:** هیچ حداقل طول ثابتی برای کلید عمومی اعمال نمی‌شود. صرفاً غیرخالی بودن، عدم وجود فاصله (whitespace) داخلی و نبود کاراکترهای کنترلی بررسی شده و تایید نهایی به عهده پاسخ سرویس گذاشته می‌شود.
-> 3. **مدیریت خطای مشترک مرورگر (`NETWORK_OR_CORS_ERROR`):** به دلیل این‌که موتور مرورگر در زمان شکست Network یا بلاک شدن توسط CORS استثنای یکسان (`TypeError: Failed to fetch`) تولید می‌کند، در موارد مبهم وضعیت صریح `NETWORK_OR_CORS_ERROR` ثبت شده و از حدس و گمان پرهیز می‌شود.
-> 4. **صداقت در وضعیت REST API (`NOT TESTABLE YET`):** تا قبل از استقرار جداول در فاز ۴.۲، وضعیت REST API به عنوان «هنوز قابل ارزیابی نیست» نمایش داده شده و با کوئری دیتابیس اشتباه گرفته نمی‌شود.
-> 5. **یکپارچگی متغیر منبع داده:** نامگذاری منحصراً بر پایه `VITE_DATA_SOURCE` (`mock` یا `supabase`).
-> 6. **پشتیبانی دوگانه با اولویت `VITE_SUPABASE_PUBLISHABLE_KEY` بر `VITE_SUPABASE_ANON_KEY`.**
-> 7. **عدم نمایش هیچ بخشی از مقدار کلید در پنل مدیریت یا کنسول.**
-> 8. **ساختار کلاینت تکینگی ساده ماژولار بدون کلاس‌های انتزاعی سنگین.**
+> **Summary of Confirmed Architectural Resolutions:**
+> 1. **Opening Inventory & Paired Movements**: Initial inventory requires an explicit `opening_balance` record in `stock_movements`. Warehouse transfers atomically create paired `transfer_out` and `transfer_in` entries linked by `reference_id`. Row-level locks (`SELECT ... FOR UPDATE` on `warehouse_stock`) guarantee `balance_after` consistency under concurrent transactions.
+> 2. **RPC-Only Mutation Discipline**: Direct client `INSERT`, `UPDATE`, and `DELETE` on `warehouse_stock` and `stock_movements` are completely blocked (`DENIED`) by RLS. All stock movements must be executed via `SECURITY DEFINER` RPC functions.
+> 3. **Wallet Sub-Ledger & Projection**: `wallets.cached_balance_toman` is strictly a materialized projection. All balance mutations occur via `rpc_post_wallet_transaction()` with row-level locks and non-negative balance checks. Direct client mutations are blocked by RLS.
+> 4. **Configurable Warranty Duration**: Duration is dynamic per provider/product/device (`warranties.duration_months`, `product_serial_units.warranty_duration_months`). No duration is hardcoded. Expiration is computed from delivery date.
+> 5. **Late-Payment Recovery & Zero Overselling Guarantee**: When a verified gateway success callback arrives for an expired reservation, the system checks available stock with `FOR UPDATE`. If available, it auto-recovers and fulfills; if exhausted, it initiates an automatic refund and sets status to `stock_exhausted_pending_refund` without overselling.
+> 6. **Exact 48-Table Inventory**: Strictly divided into 32 Initial Implementation tables and 16 Later Extension tables with a complete Master Registry documenting domains, dependencies, canonical/projection status, deletion rules, and RLS requirements.
+> 7. **Strict Currency Invariant**: All monetary fields use 64-bit integer `BIGINT` in Toman. Zero floating-point numbers.
+> 8. **Documentation-Only Scope**: Pure documentation across all 8 files in `docs/database/` with zero application code changes, zero package installations, and zero database executions.
 
 ---
 
-## ۱. نمای کلی سیستم و معماری جریان داده (System Architecture)
+## 1. Master Table Registry & Classification (48 Tables)
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        Environment Variables                           │
-│   - VITE_DATA_SOURCE: 'mock' | 'supabase'                              │
-│   - VITE_SUPABASE_URL: string (HTTPS prod / HTTP localhost)           │
-│   - VITE_SUPABASE_PUBLISHABLE_KEY: string (Primary public key)         │
-│   - VITE_SUPABASE_ANON_KEY: string (Legacy fallback key)               │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                     src/services/config.ts                             │
-│   - DATA_SOURCE: DataSourceType                                        │
-│   - SUPABASE_URL: string                                               │
-│   - SUPABASE_KEY_INFO: { hasKey: boolean, keyType: 'publishable'|... } │
-│   - validateKeyFormat(key: string): boolean (No whitespace/control)    │
-│   - validateSupabaseConfig(): ConfigValidationResult                   │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                   src/services/supabaseClient.ts                       │
-│   - Module-level Singleton (let supabase: SupabaseClient | null)       │
-│   - getSupabaseClient(): SupabaseClient | throws explicit config error │
-│   - testAuthHealth(): GET /auth/v1/health + checks name === 'GoTrue'   │
-│   - Error Classification: TIMEOUT, HTTP_ERROR, NETWORK_OR_CORS_ERROR   │
-│   - runSupabaseDiagnostics(): Multi-stage diagnostic runner            │
-│   - window.cnaSupabaseDiagnostic (DEV environment helper)              │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-        ┌───────────────────────────┴───────────────────────────┐
-        ▼                                                       ▼
-┌──────────────────────────────────────┐  ┌─────────────────────────────┐
-│ src/components/admin/diagnostics/    │  │ Browser Console Diagnostic  │
-│ DatabaseDiagnosticsPanel.tsx         │  │ window.cnaSupabaseDiagnostic│
-│ - Stage 1: Configuration Validation  │  └─────────────────────────────┘
-│ - Stage 2: Auth API Health (GoTrue)  │
-│ - Stage 3: REST API (NOT TESTABLE)   │
-│ - Stage 4: Database Query (DEFERRED) │
-└──────────────────────────────────────┘
-```
+| # | Table Name | Domain | Phase | Upstream Dependencies (FK) | Data Classification | Deletion Rule | RLS Policy Requirement |
+| :---: | :--- | :--- | :---: | :--- | :--- | :--- | :--- |
+| **1** | `profiles` | Identity | Initial | `auth.users` | Canonical Truth | RESTRICT | User: Select/Update own; Admin: Manage |
+| **2** | `user_addresses` | Identity | Initial | `profiles` | Canonical Truth | CASCADE | User: CRUD own addresses |
+| **3** | `auth_roles` | Security | Initial | — | Canonical Truth | RESTRICT | Public: Read; Super Admin: Manage |
+| **4** | `auth_permissions` | Security | Initial | — | Canonical Truth | RESTRICT | Public: Read; Super Admin: Manage |
+| **5** | `auth_role_permissions`| Security| Initial | `auth_roles`, `auth_permissions`| Canonical Junction | CASCADE | Super Admin only |
+| **6** | `auth_user_roles` | Security | Initial | `auth.users`, `auth_roles` | Canonical Junction | CASCADE / RESTRICT | User: Read own roles; Admin: Manage |
+| **7** | `categories` | Catalog | Initial | `categories (parent)` | Canonical Truth | RESTRICT | Public: Read active; Catalog Admin: Write |
+| **8** | `brands` | Catalog | Initial | — | Canonical Truth | RESTRICT | Public: Read active; Catalog Admin: Write |
+| **9** | `products` | Catalog | Initial | `categories`, `brands` | Canonical Truth (+Cached JSON) | RESTRICT | Public: Read published; Catalog: Write |
+| **10** | `product_images` | Catalog | Initial | `products` | Canonical Truth | CASCADE | Public: Read; Catalog Admin: Write |
+| **11** | `attribute_definitions`| Specs | Initial | — | Canonical Truth | RESTRICT | Public: Read; Catalog Admin: Write |
+| **12** | `category_attributes` | Specs | Initial | `categories`, `attribute_defs` | Canonical Junction | CASCADE | Public: Read; Catalog Admin: Write |
+| **13** | `product_attribute_values`| Specs | Initial | `products`, `attribute_defs` | **Canonical Source of Truth** | CASCADE / RESTRICT | Public: Read; Catalog Admin: Write |
+| **14** | `warranties` | Catalog | Initial | — | Canonical Truth (Dynamic) | RESTRICT | Public: Read; Catalog Admin: Write |
+| **15** | `product_variants` | Catalog | Initial | `products`, `warranties` | Canonical SKU Truth | CASCADE / RESTRICT | Public: Read; Catalog/Warehouse: Write |
+| **16** | `warehouses` | Inventory | Initial | — | Canonical Truth | RESTRICT | Warehouse Staff: Read; Admin: Manage |
+| **17** | `warehouse_stock` | Inventory | Initial | `warehouses`, `product_variants`| **Materialized Projection** | RESTRICT | Warehouse Staff: Read; **RPC Only Mutations** |
+| **18** | `stock_movements` | Inventory | Initial | `warehouses`, `product_variants`| **Canonical Immutable Ledger**| RESTRICT | Warehouse Staff: Read; **RPC Only Mutations** |
+| **19** | `stock_reservations`| Inventory | Initial | `warehouses`, `product_variants`| Temporary Atomic Hold | RESTRICT / CASCADE | User: Read own; **RPC Only Mutations** |
+| **20** | `carts` | Cart | Initial | `profiles` | Transient State | CASCADE / SET NULL | User: CRUD own cart / guest session |
+| **21** | `cart_items` | Cart | Initial | `carts`, `product_variants` | Transient State | CASCADE | User: CRUD own cart items |
+| **22** | `tax_rules` | Finance | Initial | — | Versioned Policy | RESTRICT | Public: Read active; Finance Admin: Manage |
+| **23** | `orders` | Orders | Initial | `auth.users`, `shipping_methods`| Canonical Order Header | RESTRICT | User: Read own; Client Direct Write Blocked |
+| **24** | `order_items` | Orders | Initial | `orders`, `product_variants` | **Immutable Purchase Snapshot**| CASCADE / RESTRICT | User: Read own invoice; Client Write Blocked |
+| **25** | `order_status_history`| Orders | Initial | `orders`, `auth.users` | Immutable Audit Trail | CASCADE | User: Read own status; Staff: Insert |
+| **26** | `wallets` | Finance | Initial | `auth.users` | **Materialized Projection** | RESTRICT | User: Read own; **RPC Only Mutations** |
+| **27** | `wallet_transactions`| Finance | Initial | `wallets` | **Canonical Immutable Ledger**| RESTRICT | User: Read own; **RPC Only Mutations** |
+| **28** | `invoices` | Finance | Initial | `orders`, `auth.users` | Official Invoice Snapshot | RESTRICT | User: Read own invoice; Mutation Blocked |
+| **29** | `payments` | Finance | Initial | `orders`, `auth.users` | Canonical Payment Case | RESTRICT | User: Read own payment; Client Direct Write Blocked |
+| **30** | `payment_transactions`| Finance | Initial | `payments` | Immutable Transaction Log | RESTRICT | User: Read own receipt; Direct Write Blocked |
+| **31** | `shipping_methods` | Logistics | Initial | — | Canonical Truth | RESTRICT | Public: Read active; Logistics: Manage |
+| **32** | `store_settings` | Settings | Initial | `auth.users` | Canonical Settings Store | RESTRICT | Public: Read public keys; Admin: Manage |
+| **33** | `product_serial_units`| Serial | Extension | `product_variants`, `warehouses`| Physical Device Tracking | RESTRICT / SET NULL | Warehouse Staff: Manage via scanner |
+| **34** | `inventory_transfers` | Inventory | Extension | `warehouses`, `auth.users` | Transfer Document | RESTRICT | Warehouse Staff: Create/Verify with perm |
+| **35** | `inventory_transfer_items`| Inventory | Extension | `inventory_transfers`, `variants`| Transfer Lines | CASCADE / RESTRICT | Warehouse Staff: Manage lines |
+| **36** | `order_returns` | Care | Extension | `orders`, `order_items`, `users` | RMA Lifecycle Case | RESTRICT | User: Request own RMA; Staff: Inspect |
+| **37** | `payment_webhook_logs`| Finance | Extension | — | Idempotent Audit Log | RESTRICT | Finance Admin: Read; System: Insert |
+| **38** | `shipments` | Logistics | Extension | `orders`, `methods`, `warehouses`| Carrier Consignment | RESTRICT | User: Read own; Warehouse/Carrier: Manage |
+| **39** | `shipment_tracking_events`| Logistics | Extension | `shipments` | Tracking Milestones | CASCADE | User: Read timeline; Carrier: Insert |
+| **40** | `coupons` | Marketing | Extension | — | Promotional Rule | RESTRICT | User: Validate; Marketing: Manage |
+| **41** | `coupon_usages` | Marketing | Extension | `coupons`, `orders`, `users` | Redemption Audit Log | RESTRICT | User: Read own; System: Insert on checkout |
+| **42** | `loyalty_points` | Loyalty | Extension | `auth.users` | Immutable Points Ledger | CASCADE / RESTRICT | User: Read own points; System: Insert |
+| **43** | `wishlists` | Bookmarks | Extension | `profiles`, `products` | Customer Bookmarks | CASCADE | User: CRUD own bookmarks |
+| **44** | `reviews` | Reviews | Extension | `products`, `profiles` | Moderated Content | CASCADE / SET NULL | Public: Read approved; User: Insert own |
+| **45** | `support_tickets` | Support | Extension | `profiles`, `orders` | Support Case Thread | RESTRICT | User: CRUD own tickets; Staff: Manage |
+| **46** | `ticket_messages` | Support | Extension | `support_tickets`, `auth.users` | Message History | CASCADE | Ticket Participants: Insert/Read |
+| **47** | `notifications` | Alerts | Extension | `auth.users` | Dispatch Outbox Log | RESTRICT | User: Read own; System: Manage queue |
+| **48** | `admin_audit_logs` | Audit | Extension | `auth.users` | Immutable Security Trail | RESTRICT | Super Admin: Read; Direct mutation Blocked |
+
+**Total Count: Exactly 32 Initial + 16 Extension = 48 Tables.**
 
 ---
 
-## ۲. طراحی گام‌های تست سلامت (Multi-Stage Healthcheck Matrix)
+## 2. Next Steps Upon Plan Approval
 
-| گام تست | نوع استعلام و شرایط بررسی | شرایط موفقیت | وضعیت در تسک ۴.۱ |
-| :--- | :--- | :--- | :--- |
-| **۱. Configuration Validation** | بررسی آفلاین URL و ساختار کاراکتری کلید | بدون whitespace، فاقد کاراکتر کنترلی، پروتکل مجاز HTTPS یا HTTP لوکال | **عملیاتی و فعال** |
-| **۲. Auth API Health** | درخواست GET به `${URL}/auth/v1/health` با هدر `apikey` و Timeout ۵ ثانیه‌ای | دریافت HTTP 200 و تطابق `data.name === 'GoTrue'` و وجود نسخه غیرخالی | **عملیاتی و فعال** |
-| **۳. REST API Availability** | نیازمند جدول یا RPC عمومی با کلید عمومی | — | **صادقانه: NOT TESTABLE YET (موکول به فاز ۴.۲)** |
-| **۴. Database Query Execution** | اجرای کوئری با PostgREST | — | **غیرفعال: DEFERRED TO SCHEMA CREATION** |
-
----
-
-## ۳. مراحل اجرایی دقیق (Implementation Checklist)
-
-1. **نصب پکیج رسمی**:
-   - نصب `@supabase/supabase-js` با ابزار `install_applet_package`.
-2. **به‌روزرسانی و استانداردسازی `src/services/config.ts`**:
-   - دریافت `VITE_DATA_SOURCE`.
-   - اولویت‌دهی `VITE_SUPABASE_PUBLISHABLE_KEY` به `VITE_SUPABASE_ANON_KEY`.
-   - اعتبارسنجی URL سازگار با پروداکشن (HTTPS) و لوکال‌هاست (HTTP).
-   - اعتبارسنجی منعطف کلید: غیرخالی بودن، عدم وجود فاصله داخلی (`!/\s/.test(key)`) و نبود کاراکترهای کنترلی (`!/[\x00-\x1F\x7F]/.test(key)`).
-   - ثبت هشدار در صورت تعریف همزمان هر دو کلید بدون افشای مقادیر.
-3. **پیاده‌سازی کلاینت متمرکز و رانر تشخیصی در `src/services/supabaseClient.ts`**:
-   - متغیر ماژولار `let supabaseInstance: SupabaseClient | null = null`.
-   - تابع `getSupabaseClient()` با پرتاب خطای صریح در حالت `DATA_SOURCE === 'supabase'`.
-   - متد تست سلامت Auth API با `AbortController` (مهلت ۵ ثانیه)، ارسال هدر `apikey`، و ارزیابی محتوای `data.name === 'GoTrue'` و رشته بودن `version`.
-   - دسته‌بندی خطاهای شبکه به `TIMEOUT`, `HTTP_STATUS_ERROR`, `NETWORK_OR_CORS_ERROR`.
-   - تابع جامع `runSupabaseDiagnostics()` بازگرداننده وضعیت تفکیک‌شده ۳ فاز.
-   - ثبت در `window.cnaSupabaseDiagnostic` در محیط توسعه (`import.meta.env.DEV`).
-4. **توسعه کامپوننت ماژولار تشخیصی**:
-   - ساخت `src/components/admin/diagnostics/DatabaseDiagnosticsPanel.tsx`.
-   - نمایش کارت‌های متادیتای غیرحساس (وضعیت منبع داده، آدرس سرور، نوع کلید فعال، وضعیت ۳ تست).
-   - نمایش وضعیت صریح `NOT TESTABLE YET` برای REST API و برچسب فاز بعدی.
-   - الحاق تب در `src/pages/admin/AdminSettingsPage.tsx`.
-5. **مستندسازی و کنترل Git**:
-   - تکمیل `.env.example` با متغیرهای `VITE_DATA_SOURCE`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_ANON_KEY`.
-   - بررسی و اطمینان از قرار داشتن فایل‌های `.env` و `.env.local` در `.gitignore`.
-6. **تست و ارزیابی نهایی**:
-   - اجرای `compile_applet` و اطمینان از قبولی کامل بیلد و سلامت انواع تایپ‌ها.
+Proceed to Task 4.3 (physical DDL migration generation, initial data seeding, and test verification suite).

@@ -1,6 +1,6 @@
 {
-  "summary":  "طرح اجرایی قطعی تسک ۴.۱ با اعمال ۳ اصلاحیه تکمیلی: تایید دقیق محتوای پاسخ /auth/v1/health (بررسی name === 'GoTrue' و وجود نسخه غیرخالی)، حذف حداقل طول ثابت کلید و بسنده کردن به عدم وجود whitespace و کاراکترهای کنترلی، و استفاده از وضعیت مشترک NETWORK_OR_CORS_ERROR هنگام بروز خطاهای مبهم ارتباطی مرورگر.",
-  "updatedAt":  "2026-10-30T15:35:08.461849263Z",
+  "summary":  "Final implementation plan for Task 4.2 incorporating all 7 final technical requirements: opening stock movement, paired transfer entries, balance_after concurrency locks, RPC-only mutation discipline for inventory and wallet, configurable warranty durations, late-payment recovery preventing overselling, 48-table master registry with 32 initial vs 16 extension tables, and strict BIGINT Toman precision.",
+  "updatedAt":  "2026-10-30T17:43:19.191069050Z",
   "requestFeedback":  true,
   "userFacing":  true
 }
