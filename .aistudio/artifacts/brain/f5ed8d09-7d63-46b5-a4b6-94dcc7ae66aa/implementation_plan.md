@@ -71,8 +71,9 @@ Authoritative architectural specification and technical blueprint for CNA Mobile
 | **46** | `ticket_messages` | Support | Extension | `support_tickets`, `auth.users` | Message History | CASCADE | Ticket Participants: Insert/Read |
 | **47** | `notifications` | Alerts | Extension | `auth.users` | Dispatch Outbox Log | RESTRICT | User: Read own; System: Manage queue |
 | **48** | `admin_audit_logs` | Audit | Extension | `auth.users` | Immutable Security Trail | RESTRICT | Super Admin: Read; Direct mutation Blocked |
+| **49** | `payment_refund_attempts` | Finance | Extension | `payment_transactions` | **Canonical Ledger** | RESTRICT | Service Role Only (Bank) / Finance Admin: Read |
 
-**Total Count: Exactly 32 Initial + 16 Extension = 48 Tables.**
+**Total Count: Exactly 32 Initial + 17 Extension = 49 Application Tables in `public` schema (+ 1 external identity table `auth.users` in `auth` schema = 50 total entities).**
 
 ---
 

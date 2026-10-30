@@ -32,6 +32,8 @@
 | `wallet_transactions` | `idempotency_key`| `uq_wallet_tx_idemp` | **کلید ضدتکرار تراکنش‌های کیف پول جهت پیشگیری از سند تکراری** |
 | `stock_movements` | `idempotency_key`| `uq_stock_movements_idemp` | **کلید ضدتکرار اسناد انبار جهت پیشگیری از ورود یا خروج مضاعف** |
 | `payment_transactions` | `idempotency_key`| `uq_payment_tx_idemp` | جلوگیری از ارسال تراکنش تکراری به درگاه |
+| `payment_refund_attempts` | `idempotency_key`| `uq_refund_attempts_idemp` | **کلید ضدتکرار کلاینت/سرویس جهت منع تکرار تلاش استرداد در سطح رابطه** |
+| `payment_refund_attempts` | `attempt_id` | `uq_refund_attempts_attempt_id` | **شناسه یکتای هر تلاش واقعی استرداد جهت ممیزی مستقل** |
 | `payment_webhook_logs` | `idempotency_key`| `uq_payment_webhooks_idemp` | جلوگیری از پردازش مضاعف وب‌هوک‌های ارسالی بانک |
 | `shipping_methods` | `code` | `uq_shipping_methods_code` | کد متد ارسال (مانند `tipax`, `express_tehran`) |
 | `shipments` | `shipment_number`| `uq_shipments_number` | شناسه بارنامه داخلی مرسوله |
@@ -181,6 +183,7 @@ CREATE INDEX idx_warehouse_stock_variant ON warehouse_stock(variant_id);
 CREATE INDEX idx_stock_movements_variant ON stock_movements(variant_id);
 CREATE INDEX idx_wallet_transactions_wallet ON wallet_transactions(wallet_id);
 CREATE INDEX idx_product_serial_units_variant ON product_serial_units(variant_id);
+CREATE INDEX idx_refund_attempts_tx ON payment_refund_attempts(refund_transaction_id);
 ```
 
 ### ۴.۲. ایندکس‌های کانونیکال مشخصات فنی برای فیلترهای چندمعیاره (Faceted Filtering)

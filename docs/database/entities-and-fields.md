@@ -595,6 +595,21 @@
 
 ---
 
+### ۸.۸. جدول `payment_refund_attempts` (دفتر کل کانونیکال تلاش‌های استرداد وجه و ضدتکرار)
+| نام ستون | نوع داده | وضعیت Null | مقدار پیش‌فرض | توضیحات |
+| :--- | :--- | :--- | :--- | :--- |
+| `id` | `UUID` | NOT NULL | `gen_random_uuid()` | کلید اصلی ردیف تلاش استرداد |
+| `refund_transaction_id`| `UUID` | NOT NULL | — | ارجاع به سند استرداد؛ `payment_transactions(id) ON DELETE RESTRICT` |
+| `attempt_id` | `UUID` | NOT NULL | — | شناسه یکتای تلاش مستقل بانکی؛ `UNIQUE` |
+| `idempotency_key`| `VARCHAR(100)`| NOT NULL | — | **کلید ضدتکرار کلاینت/سرویس؛ `UNIQUE` جهت جلوگیری از تکرار تلاش بانکی** |
+| `status` | `VARCHAR(20)` | NOT NULL | `'initiated'` | وضعیت: `'initiated'`, `'verified'`, `'failed'` |
+| `request_payload`| `JSONB` | NULL | — | پارامترهای ارسالی به وب‌سرویس درگاه در این تلاش |
+| `response_payload`| `JSONB` | NULL | — | پاسخ تفصیلی و شماره پیگیری بانکی یا خطای این تلاش |
+| `created_at` | `TIMESTAMPTZ` | NOT NULL | `NOW()` | زمان شروع تلاش استرداد |
+| `completed_at` | `TIMESTAMPTZ` | NULL | — | زمان پایان و ثبت نتیجه پاسخ درگاه |
+
+---
+
 ## ۹. دامنه روش‌های ارسال، بارنامه و رهگیری پستی (Shipping & Logistics)
 
 ### ۹.۱. جدول `shipping_methods` (روش‌های مجاز ارسال کالا)

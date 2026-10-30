@@ -61,6 +61,7 @@
 | `payments` | `order_id` | `orders` | `id` | `RESTRICT` | پرونده پرداخت تسویه سفارش |
 | `payment_transactions` | `payment_id` | `payments` | `id` | `RESTRICT` | سند تراکنش درگاه پرداخت غیرقابل حذف است |
 | `payment_transactions` | `parent_transaction_id`| `payment_transactions` | `id` | `RESTRICT` | ارجاع تراکنش استرداد به تراکنش خرید اصلی جهت ممیزی و تطابق مبالغ |
+| `payment_refund_attempts`| `refund_transaction_id`| `payment_transactions`| `id` | `RESTRICT` | هر تلاش استرداد به سند تراکنش استرداد متصل است و لاگ ممیزی آن نباید حذف شود |
 | `shipments` | `order_id` | `orders` | `id` | `RESTRICT` | بارنامه پستی کالا |
 | `shipment_tracking_events`| `shipment_id`| `shipments` | `id` | `CASCADE` | سوابق جابه‌جایی مرسوله پستی |
 | `coupon_usages` | `coupon_id` | `coupons` | `id` | `RESTRICT` | تاریخچه استناد به کدهای تخفیف |
