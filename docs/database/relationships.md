@@ -102,6 +102,7 @@
 8. **`orders ↔ order_status_history`**: هر سفارش دارای خط زمانی چندمرحله‌ای است.
 9. **`payments ↔ payment_transactions`**: هر پرونده پرداخت ممکن است شامل چند تلاش درگاه باشد.
 10. **`wallets ↔ wallet_transactions`**: هر کیف پول دارای تاریخچه‌ای از تراکنش‌های واریز و برداشت است.
+11. **`payment_transactions ↔ payment_refund_attempts`**: هر سند استرداد وجه می‌تواند شامل چندین تلاش بانکی مستقل و تکرارپذیر جهت ممیزی باشد (`ON DELETE RESTRICT`).
 
 ### روابط چندبه‌چند (N:M Relationships via Junction Tables)
 1. **`auth_roles ↔ auth_permissions` (واسط: `auth_role_permissions`)**: هر نقش چندین مجوز دارد و هر مجوز در چندین نقش تکرار می‌شود.

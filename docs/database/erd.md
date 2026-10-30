@@ -56,6 +56,7 @@ graph TD
         INV["invoices (Official Invoice)"]
         PAY["payments"]
         PT["payment_transactions (IPG Attempts)"]
+        PRA["payment_refund_attempts (Canonical Attempt Ledger)"]
         PWL["payment_webhook_logs (Idempotent)"]
     end
 
@@ -114,6 +115,7 @@ graph TD
     O -->|1:1| INV
     O -->|1:N| PAY
     PAY -->|1:N| PT
+    PT -->|1:N| PRA
 
     O -->|1:N| SHP
     SMTH -->|1:N| SHP
@@ -129,9 +131,9 @@ graph TD
 
 > [!NOTE]
 > **قاعده نام‌گذاری و شمارش جداول در دیاگرام‌ها:**
-> - **تعداد جداول تجاری اپلیکیشن:** دقیقاً **۴۸ جدول** در اسکیما `public` (شامل ۳۲ جدول فاز اول و ۱۶ جدول فاز دوم) مطابق با شناسنامه جدول Master Registry.
+> - **تعداد جداول تجاری اپلیکیشن:** دقیقاً **۴۹ جدول** در اسکیما `public` (شامل ۳۲ جدول فاز اول و ۱۷ جدول فاز دوم) مطابق با شناسنامه جدول Master Registry در README.
 > - **موجودیت احراز هویت خارجی:** جدول `auth.users` متعلق به اسکیما داخلی `auth` سوپابیس بوده و جدول اختصاصی CNA محسوب نمی‌شود، اما به عنوان مقصد کلیدهای خارجی در دیاگرام رسم شده است. به دلیل محدودیت نحوی سینتکس Mermaid در پذیرش علامت نقطه (`.`) در نام موجودیت‌ها، این جدول در دیاگرام زیر به صورت `auth_users` نام‌گذاری شده است.
-> - **مجموع موجودیت‌های رسم‌شده:** ۴۸ جدول اپلیکیشن + ۱ جدول هویتی پایه = مجموعاً ۴۹ موجودیت.
+> - **مجموع موجودیت‌های رسم‌شده:** ۴۹ جدول اپلیکیشن + ۱ جدول هویتی پایه = مجموعاً ۵۰ موجودیت رابطه ای.
 
 ```mermaid
 erDiagram
@@ -180,6 +182,7 @@ erDiagram
     orders ||--o{ payments : "settled via"
     payments ||--o{ payment_transactions : "processed by IPG"
     payment_transactions ||--o{ payment_transactions : "refund parent transaction"
+    payment_transactions ||--o{ payment_refund_attempts : "audits refund attempts"
 
     orders ||--o{ shipments : "dispatched as"
     shipping_methods ||--o{ shipments : "carrier method"
@@ -349,5 +352,16 @@ erDiagram
 │ idempotency_key (VARCHAR, UQ)│         │ amount_toman (BIGINT)        │
 │ shaparak_rrn (VARCHAR)       │         │ balance_after_toman (BIGINT) │
 │ trace_number (VARCHAR)       │         │ transaction_type (credit)    │
-└──────────────────────────────┘         └──────────────────────────────┘
+└──────────────┬───────────────┘         └──────────────────────────────┘
+               │ 1
+               ▼ N
+┌──────────────────────────────┐
+│   payment_refund_attempts    │
+│ ──────────────────────────── │
+│ id (UUID, PK)                │
+│ refund_tx_id (UUID, FK)      │
+│ attempt_id (UUID, UQ)        │
+│ idempotency_key (VARCHAR, UQ)│
+│ status (initiated/verified)  │
+└──────────────────────────────┘
 ```

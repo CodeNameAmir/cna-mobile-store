@@ -1,6 +1,6 @@
 # CNA Mobile Store — Entities & Fields Data Dictionary
 
-فرهنگ داده‌ای جامع و مشخصات فنی فیلدهای تمام ۴۸ جدول پایگاه داده فروشگاه سی‌ان‌ای در PostgreSQL / Supabase.
+فرهنگ داده‌ای جامع و مشخصات فنی فیلدهای تمام ۴۹ جدول پایگاه داده فروشگاه سی‌ان‌ای در PostgreSQL / Supabase.
 
 ---
 
@@ -404,7 +404,7 @@
 | `id` | `UUID` | NOT NULL | `gen_random_uuid()` | کلید اصلی داخلی سیستم |
 | `order_number` | `VARCHAR(32)` | NOT NULL | — | شماره سفارش مشتری؛ `UNIQUE` (تولید با سال پویا: `CNA-{YEAR}-{SEQ}`) |
 | `user_id` | `UUID` | NOT NULL | — | ارجاع به `auth.users(id) ON DELETE RESTRICT` |
-| `status` | `VARCHAR(35)` | NOT NULL | `'pending_payment'`| وضعیت: `'pending_payment'`, `'paid'`, `'processing'`, `'packed'`, `'shipped'`, `'delivered'`, `'cancelled'`, `'refunded'`, `'stock_exhausted_pending_refund'` |
+| `status` | `VARCHAR(35)` | NOT NULL | `'pending_payment'`| وضعیت: `'pending_payment'`, `'paid'`, `'processing'`, `'packed'`, `'shipped'`, `'delivered'`, `'cancelled'`, `'partially_refunded'`, `'refunded'`, `'stock_exhausted_pending_refund'` |
 | `subtotal_toman` | `BIGINT` | NOT NULL | — | **جمع کل اقلام قبل از تخفیف به عدد صحیح تومان (BIGINT)** |
 | `discount_toman` | `BIGINT` | NOT NULL | `0` | **کل مبلغ تخفیف اعمال‌شده به عدد صحیح تومان (BIGINT)** |
 | `tax_amount_toman`| `BIGINT` | NOT NULL | `0` | **مبلغ مالیات به عدد صحیح تومان (BIGINT)** |
@@ -554,7 +554,7 @@
 | `user_id` | `UUID` | NOT NULL | — | ارجاع به `auth.users(id) ON DELETE RESTRICT` |
 | `amount_toman` | `BIGINT` | NOT NULL | — | **کل مبلغ الزامی جهت تسویه به عدد صحیح تومان (BIGINT)** |
 | `method` | `VARCHAR(30)` | NOT NULL | — | شیوه: `'online_ipg'`, `'wallet'`, `'installment'`, `'pos_on_delivery'` |
-| `status` | `VARCHAR(25)` | NOT NULL | `'pending'` | وضعیت: `'pending'`, `'completed'`, `'failed'`, `'refund_pending'`, `'refund_failed'`, `'refunded'` |
+| `status` | `VARCHAR(25)` | NOT NULL | `'pending'` | وضعیت: `'pending'`, `'completed'`, `'failed'`, `'refund_pending'`, `'refund_failed'`, `'partially_refunded'`, `'refunded'` |
 | `created_at` | `TIMESTAMPTZ` | NOT NULL | `NOW()` | زمان ایجاد رکورد پرداخت |
 | `completed_at` | `TIMESTAMPTZ` | NULL | — | زمان تسویه موفق وجه |
 

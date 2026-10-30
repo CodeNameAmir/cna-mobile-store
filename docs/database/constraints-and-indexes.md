@@ -109,6 +109,20 @@ ALTER TABLE coupons
 ALTER TABLE payment_transactions 
   ADD CONSTRAINT chk_payment_tx_type 
   CHECK (transaction_type IN ('payment', 'refund', 'reversal'));
+
+-- ۹. اعتبارسنجی وضعیت‌های تلاش استرداد در جدول کانونیکال
+ALTER TABLE payment_refund_attempts 
+  ADD CONSTRAINT chk_refund_attempts_status 
+  CHECK (status IN ('initiated', 'verified', 'failed'));
+
+-- ۱۰. اعتبارسنجی وضعیت‌های سفارش و پرداخت با تفکیک استرداد جزئی و کامل
+ALTER TABLE orders 
+  ADD CONSTRAINT chk_orders_status 
+  CHECK (status IN ('pending_payment', 'paid', 'processing', 'packed', 'shipped', 'delivered', 'cancelled', 'partially_refunded', 'refunded', 'stock_exhausted_pending_refund'));
+
+ALTER TABLE payments 
+  ADD CONSTRAINT chk_payments_status 
+  CHECK (status IN ('pending', 'completed', 'failed', 'refund_pending', 'refund_failed', 'partially_refunded', 'refunded'));
 ```
 
 ---
