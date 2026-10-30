@@ -63,8 +63,8 @@
 | **۹** | `products` | کاتالوگ | فاز ۱ | `categories`, `brands` | Canonical Truth (+Cached JSON) | RESTRICT | عمومی: Read منتشرشده‌ها؛ کاتالوگ: Write |
 | **۱۰** | `product_images` | کاتالوگ | فاز ۱ | `products` | Canonical Truth | CASCADE | عمومی: Read؛ مدیر کاتالوگ: Write |
 | **۱۱** | `attribute_definitions`| مشخصات | فاز ۱ | — | Canonical Truth | RESTRICT | عمومی: Read؛ مدیر کاتالوگ: Write |
-| **۱۲** | `category_attributes` | مشخصات | فاز ۱ | `categories`, `attribute_defs` | Canonical Junction | CASCADE | عمومی: Read؛ مدیر کاتالوگ: Write |
-| **۱۳** | `product_attribute_values`| مشخصات| فاز ۱ | `products`, `attribute_defs` | **Canonical Source of Truth** | CASCADE / RESTRICT | عمومی: Read؛ مدیر کاتالوگ: Write |
+| **۱۲** | `category_attributes` | مشخصات | فاز ۱ | `categories`, `attribute_definitions` | Canonical Junction | CASCADE | عمومی: Read؛ مدیر کاتالوگ: Write |
+| **۱۳** | `product_attribute_values`| مشخصات| فاز ۱ | `products`, `attribute_definitions` | **Canonical Source of Truth** | CASCADE / RESTRICT | عمومی: Read؛ مدیر کاتالوگ: Write |
 | **۱۴** | `warranties` | کاتالوگ | فاز ۱ | — | Canonical Truth | RESTRICT | عمومی: Read؛ مدیر کاتالوگ: Write |
 | **۱۵** | `product_variants` | کاتالوگ | فاز ۱ | `products`, `warranties` | Canonical SKU Truth | CASCADE / RESTRICT | عمومی: Read؛ مدیر کاتالوگ/انبار: Write |
 | **۱۶** | `warehouses` | انبارداری | فاز ۱ | — | Canonical Truth | RESTRICT | پرسنل انبار: Read؛ ادمین: Manage |
@@ -86,13 +86,13 @@
 | **۳۲** | `store_settings` | تنظیمات | فاز ۱ | `auth.users` | Canonical Settings Store | RESTRICT | عمومی: Read کلیدهای عمومی؛ ادمین: Manage |
 | **۳۳** | `product_serial_units`| ردیابی | فاز ۲ | `product_variants`, `warehouses`| Physical Device Tracking | RESTRICT / SET NULL | پرسنل انبار: Manage؛ تغییر فیزیکی با اسکنر |
 | **۳۴** | `inventory_transfers` | انبارداری | فاز ۲ | `warehouses`, `auth.users` | Transfer Document | RESTRICT | پرسنل انبار: ایجاد و تایید حواله با مجوز |
-| **۳۵** | `inventory_transfer_items`| انبار | فاز ۲ | `inventory_transfers`, `variants`| Transfer Lines | CASCADE / RESTRICT | پرسنل انبار: ثبت اقلام حواله |
-| **۳۶** | `order_returns` | خدمات | فاز ۲ | `orders`, `order_items`, `users` | RMA Lifecycle Case | RESTRICT | کاربر: ثبت مرجوعی خود؛ کارشناس: بررسی و حکم |
+| **۳۵** | `inventory_transfer_items`| انبار | فاز ۲ | `inventory_transfers`, `product_variants`| Transfer Lines | CASCADE / RESTRICT | پرسنل انبار: ثبت اقلام حواله |
+| **۳۶** | `order_returns` | خدمات | فاز ۲ | `orders`, `order_items`, `auth.users` | RMA Lifecycle Case | RESTRICT | کاربر: ثبت مرجوعی خود؛ کارشناس: بررسی و حکم |
 | **۳۷** | `payment_webhook_logs`| مالی | فاز ۲ | — | Idempotent Audit Log | RESTRICT | ادمین مالی: Read؛ درج توسط وبهوک سیستم |
-| **۳۸** | `shipments` | لجستیک | فاز ۲ | `orders`, `methods`, `warehouses`| Carrier Consignment | RESTRICT | کاربر: Read مرسوله خود؛ انبار/پست: Manage |
+| **۳۸** | `shipments` | لجستیک | فاز ۲ | `orders`, `shipping_methods`, `warehouses`| Carrier Consignment | RESTRICT | کاربر: Read مرسوله خود؛ انبار/پست: Manage |
 | **۳۹** | `shipment_tracking_events`| لجستیک | فاز ۲ | `shipments` | Tracking Milestones | CASCADE | کاربر: Read مسیر بسته؛ سرویس پست: درج رویداد |
 | **۴۰** | `coupons` | بازاریابی | فاز ۲ | — | Promotional Rule | RESTRICT | کاربر: اعتبارسنجی کوپن؛ مدیر مارکتینگ: Manage |
-| **۴۱** | `coupon_usages` | بازاریابی | فاز ۲ | `coupons`, `orders`, `users` | Redemption Audit Log | RESTRICT | کاربر: Read استفاده خود؛ درج خودکار در خرید |
+| **۴۱** | `coupon_usages` | بازاریابی | فاز ۲ | `coupons`, `orders`, `auth.users` | Redemption Audit Log | RESTRICT | کاربر: Read استفاده خود؛ درج خودکار در خرید |
 | **۴۲** | `loyalty_points` | باشگاه | فاز ۲ | `auth.users` | Immutable Points Ledger | CASCADE / RESTRICT | کاربر: Read امتیازات خود؛ درج خودکار سیستمی |
 | **۴۳** | `wishlists` | علاقه‌مندی | فاز ۲ | `profiles`, `products` | Customer Bookmarks | CASCADE | کاربر: CRUD نشان‌های شخصی خود |
 | **۴۴** | `reviews` | نظرات | فاز ۲ | `products`, `profiles` | Moderated Content | CASCADE / SET NULL | عمومی: Read تاییدشده‌ها؛ کاربر: درج نظر خود |

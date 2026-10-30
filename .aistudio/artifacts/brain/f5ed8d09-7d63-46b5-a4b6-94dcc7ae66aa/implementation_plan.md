@@ -34,8 +34,8 @@ Authoritative architectural specification and technical blueprint for CNA Mobile
 | **9** | `products` | Catalog | Initial | `categories`, `brands` | Canonical Truth (+Cached JSON) | RESTRICT | Public: Read published; Catalog: Write |
 | **10** | `product_images` | Catalog | Initial | `products` | Canonical Truth | CASCADE | Public: Read; Catalog Admin: Write |
 | **11** | `attribute_definitions`| Specs | Initial | — | Canonical Truth | RESTRICT | Public: Read; Catalog Admin: Write |
-| **12** | `category_attributes` | Specs | Initial | `categories`, `attribute_defs` | Canonical Junction | CASCADE | Public: Read; Catalog Admin: Write |
-| **13** | `product_attribute_values`| Specs | Initial | `products`, `attribute_defs` | **Canonical Source of Truth** | CASCADE / RESTRICT | Public: Read; Catalog Admin: Write |
+| **12** | `category_attributes` | Specs | Initial | `categories`, `attribute_definitions` | Canonical Junction | CASCADE | Public: Read; Catalog Admin: Write |
+| **13** | `product_attribute_values`| Specs | Initial | `products`, `attribute_definitions` | **Canonical Source of Truth** | CASCADE / RESTRICT | Public: Read; Catalog Admin: Write |
 | **14** | `warranties` | Catalog | Initial | — | Canonical Truth (Dynamic) | RESTRICT | Public: Read; Catalog Admin: Write |
 | **15** | `product_variants` | Catalog | Initial | `products`, `warranties` | Canonical SKU Truth | CASCADE / RESTRICT | Public: Read; Catalog/Warehouse: Write |
 | **16** | `warehouses` | Inventory | Initial | — | Canonical Truth | RESTRICT | Warehouse Staff: Read; Admin: Manage |
@@ -57,13 +57,13 @@ Authoritative architectural specification and technical blueprint for CNA Mobile
 | **32** | `store_settings` | Settings | Initial | `auth.users` | Canonical Settings Store | RESTRICT | Public: Read public keys; Admin: Manage |
 | **33** | `product_serial_units`| Serial | Extension | `product_variants`, `warehouses`| Physical Device Tracking | RESTRICT / SET NULL | Warehouse Staff: Manage via scanner |
 | **34** | `inventory_transfers` | Inventory | Extension | `warehouses`, `auth.users` | Transfer Document | RESTRICT | Warehouse Staff: Create/Verify with perm |
-| **35** | `inventory_transfer_items`| Inventory | Extension | `inventory_transfers`, `variants`| Transfer Lines | CASCADE / RESTRICT | Warehouse Staff: Manage lines |
-| **36** | `order_returns` | Care | Extension | `orders`, `order_items`, `users` | RMA Lifecycle Case | RESTRICT | User: Request own RMA; Staff: Inspect |
+| **35** | `inventory_transfer_items`| Inventory | Extension | `inventory_transfers`, `product_variants`| Transfer Lines | CASCADE / RESTRICT | Warehouse Staff: Manage lines |
+| **36** | `order_returns` | Care | Extension | `orders`, `order_items`, `auth.users` | RMA Lifecycle Case | RESTRICT | User: Request own RMA; Staff: Inspect |
 | **37** | `payment_webhook_logs`| Finance | Extension | — | Idempotent Audit Log | RESTRICT | Finance Admin: Read; System: Insert |
-| **38** | `shipments` | Logistics | Extension | `orders`, `methods`, `warehouses`| Carrier Consignment | RESTRICT | User: Read own; Warehouse/Carrier: Manage |
+| **38** | `shipments` | Logistics | Extension | `orders`, `shipping_methods`, `warehouses`| Carrier Consignment | RESTRICT | User: Read own; Warehouse/Carrier: Manage |
 | **39** | `shipment_tracking_events`| Logistics | Extension | `shipments` | Tracking Milestones | CASCADE | User: Read timeline; Carrier: Insert |
 | **40** | `coupons` | Marketing | Extension | — | Promotional Rule | RESTRICT | User: Validate; Marketing: Manage |
-| **41** | `coupon_usages` | Marketing | Extension | `coupons`, `orders`, `users` | Redemption Audit Log | RESTRICT | User: Read own; System: Insert on checkout |
+| **41** | `coupon_usages` | Marketing | Extension | `coupons`, `orders`, `auth.users` | Redemption Audit Log | RESTRICT | User: Read own; System: Insert on checkout |
 | **42** | `loyalty_points` | Loyalty | Extension | `auth.users` | Immutable Points Ledger | CASCADE / RESTRICT | User: Read own points; System: Insert |
 | **43** | `wishlists` | Bookmarks | Extension | `profiles`, `products` | Customer Bookmarks | CASCADE | User: CRUD own bookmarks |
 | **44** | `reviews` | Reviews | Extension | `products`, `profiles` | Moderated Content | CASCADE / SET NULL | Public: Read approved; User: Insert own |

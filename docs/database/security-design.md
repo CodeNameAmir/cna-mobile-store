@@ -217,18 +217,56 @@ DECLARE
     v_is_service_role BOOLEAN := (COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role');
     v_order RECORD;
 BEGIN
-    -- ۱. اعتبارسنجی ضدتکرار امن در برابر تداخل همزمانی
+    -- ۱. اعتبارسنجی اولیه ضدتکرار پیش از ورود به تراکنش
     IF p_idempotency_key IS NOT NULL THEN
         SELECT id INTO v_tx_id 
         FROM wallet_transactions 
         WHERE idempotency_key = p_idempotency_key;
         
         IF FOUND THEN
-            RETURN v_tx_id; -- بازگرداندن تراکنش قبلی بدون اعمال مجدد
+            RETURN v_tx_id; -- بازگرداندن تراکنش قبلی بدون اعمال مجدد یا تغییر مانده
         END IF;
     END IF;
 
-    -- ۲. قفل بدبینانه سطری روی کیف پول
+    -- ۲. در صورت پرداخت سفارش، قفل بدبینانه ابتدا روی سفارش اعمال می‌شود (پیشگیری از پرداخت همزمان سفارش)
+    IF p_category = 'order_payment' AND p_reference_type = 'orders' THEN
+        SELECT * INTO v_order 
+        FROM orders 
+        WHERE id = p_reference_id 
+        FOR UPDATE;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'سفارش مرجع معتبر نمی‌باشد.';
+        END IF;
+
+        IF NOT v_is_service_role AND NOT auth.user_has_permission('finance:manage') THEN
+            IF v_order.user_id <> v_caller_id THEN
+                RAISE EXCEPTION 'دسترسی غیرمجاز: سفارش مرجع متعلق به کاربر جاری نیست.';
+            END IF;
+        END IF;
+
+        IF v_order.status <> 'pending_payment' THEN
+            RAISE EXCEPTION 'وضعیت سفارش جهت پرداخت از کیف پول معتبر نیست (وضعیت فعلی: %).', v_order.status;
+        END IF;
+
+        -- جلوگیری قطعی از پرداخت مضاعف سفارش توسط دو درخواست همزمان با کلیدهای ضدتکرار متفاوت
+        IF EXISTS (
+            SELECT 1 
+            FROM wallet_transactions 
+            WHERE reference_type = 'orders' 
+              AND reference_id = p_reference_id 
+              AND category = 'order_payment'
+        ) THEN
+            RAISE EXCEPTION 'برای این سفارش قبلاً تراکنش پرداخت از کیف پول ثبت شده است.';
+        END IF;
+
+        -- اعتبارسنجی دقیق مبلغ از روی سفارش سرور (عدم اعتماد به مبلغ ارسالی کلاینت)
+        IF p_amount_toman <> -v_order.total_amount_toman THEN
+            RAISE EXCEPTION 'مبلغ ارسالی با مبلغ فاکتور سفارش مطابقت ندارد.';
+        END IF;
+    END IF;
+
+    -- ۳. قفل بدبینانه سطری روی کیف پول (سریال‌سازی تراکنش‌های یک کیف پول)
     SELECT * INTO v_wallet
     FROM wallets
     WHERE id = p_wallet_id
@@ -242,40 +280,35 @@ BEGIN
         RAISE EXCEPTION 'کیف پول کاربر مسدود و قفل است.';
     END IF;
 
-    -- ۳. سیاست سخت‌گیرانه مجاز بودن عملیات بر اساس نقش فراخواننده
+    -- بررسی مجدد کلید ضدتکرار پس از اخذ قفل کیف پول جهت بستن کامل پنجره رقابت همزمان (Race-Safe)
+    IF p_idempotency_key IS NOT NULL THEN
+        SELECT id INTO v_tx_id 
+        FROM wallet_transactions 
+        WHERE idempotency_key = p_idempotency_key;
+        
+        IF FOUND THEN
+            RETURN v_tx_id; -- بازگشت ایمن بدون کوچک‌ترین دستکاری در پروجکشن مانده کیف پول
+        END IF;
+    END IF;
+
+    -- ۴. سیاست سخت‌گیرانه مجاز بودن عملیات بر اساس نقش فراخواننده
     IF v_is_service_role THEN
-        -- تماس مطمئن از سمت سرویس‌های پس‌زمینه (شارژ پس از تایید وب‌هوک یا استرداد سیستمی)
-        NULL;
+        NULL; -- سرویس‌های پس‌زمینه امن (وب‌هوک بانکی / استرداد سیستمی)
     ELSIF auth.user_has_permission('finance:manage') THEN
-        -- مدیر مالی مجاز به اعمال اصلاحات حسابداری است
-        NULL;
+        NULL; -- مدیر مالی مجاز
     ELSE
         -- کاربر عادی احراز هویت شده (مشتری):
-        -- الف) کاربر فقط مجاز به اقدام روی کیف پول خود است
         IF v_wallet.user_id <> v_caller_id THEN
             RAISE EXCEPTION 'دسترسی غیرمجاز: شما مالک این کیف پول نیستید.';
         END IF;
 
-        -- ب) مشتری هرگز مجاز به شارژ دلخواه (مبلغ مثبت) نیست
+        -- مشتری هرگز مجاز به شارژ دلخواه (مبلغ مثبت) نیست
         IF p_amount_toman > 0 THEN
             RAISE EXCEPTION 'عملیات غیرمجاز: شارژ مستقیم کیف پول توسط کلاینت ممنوع است.';
         END IF;
 
-        -- ج) مشتری تنها مجاز به پرداخت سفارش در وضعیت معلق است
         IF p_category <> 'order_payment' OR p_reference_type <> 'orders' THEN
             RAISE EXCEPTION 'عملیات غیرمجاز: سرفصل مجاز برای کلاینت صرفاً پرداخت سفارش است.';
-        END IF;
-
-        -- د) اعتبارسنجی مبلغ دقیق از روی سفارش سرور (عدم اعتماد به مبلغ ارسالی کلاینت)
-        SELECT * INTO v_order FROM orders WHERE id = p_reference_id;
-        IF NOT FOUND OR v_order.user_id <> v_caller_id THEN
-            RAISE EXCEPTION 'سفارش مرجع معتبر نمی‌باشد.';
-        END IF;
-        IF v_order.status <> 'pending_payment' THEN
-            RAISE EXCEPTION 'وضعیت سفارش جهت پرداخت از کیف پول معتبر نیست.';
-        END IF;
-        IF p_amount_toman <> -v_order.total_amount_toman THEN
-            RAISE EXCEPTION 'مبلغ ارسالی با مبلغ فاکتور سفارش مطابقت ندارد.';
         END IF;
     END IF;
 
@@ -286,13 +319,8 @@ BEGIN
 
     v_tx_type := CASE WHEN p_amount_toman >= 0 THEN 'credit' ELSE 'debit' END;
 
-    -- ۴. به‌روزرسانی پروجکشن مانده
-    UPDATE wallets
-    SET cached_balance_toman = v_new_balance,
-        updated_at = NOW()
-    WHERE id = p_wallet_id;
-
-    -- ۵. درج اتمیک سند در دفتر کل کانونیکال کیف پول با مدیریت خطای همزمانی
+    -- ۵. درج در دفتر کل کانونیکال و به‌روزرسانی پروجکشن با تعهد اتمیک همگام
+    -- درج در دفتر کل تغییرناپذیر پیش از آپدیت پروجکشن انجام شده و هر دو درون بلوک تراکنش فرعی قرار دارند
     BEGIN
         INSERT INTO wallet_transactions (
             wallet_id, amount_toman, balance_after_toman, transaction_type,
@@ -303,10 +331,27 @@ BEGIN
             p_category, p_reference_type, p_reference_id, p_description_fa,
             p_idempotency_key, COALESCE(v_caller_id, v_wallet.user_id)
         ) RETURNING id INTO v_tx_id;
+
+        -- به‌روزرسانی پروجکشن مانده منحصراً پس از ثبت موفق دفتر کل
+        UPDATE wallets
+        SET cached_balance_toman = v_new_balance,
+            updated_at = NOW()
+        WHERE id = p_wallet_id;
+
+        -- در صورت پرداخت سفارش، ثبت موفقیت و تسویه سفارش
+        IF p_category = 'order_payment' AND p_reference_type = 'orders' THEN
+            UPDATE orders
+            SET status = 'paid',
+                admin_notes = COALESCE(admin_notes, '') || ' [پرداخت موفق از کیف پول]'
+            WHERE id = p_reference_id;
+        END IF;
     EXCEPTION WHEN unique_violation THEN
+        -- در صورت وقوع همزمانی کلید ضدتکرار، کل بلوک رول‌بک شده و مانده پروجکشن هرگز تغییر نمی‌کند
         IF p_idempotency_key IS NOT NULL THEN
             SELECT id INTO v_tx_id FROM wallet_transactions WHERE idempotency_key = p_idempotency_key;
-            RETURN v_tx_id;
+            IF v_tx_id IS NOT NULL THEN
+                RETURN v_tx_id;
+            END IF;
         END IF;
         RAISE;
     END;
@@ -321,7 +366,7 @@ GRANT EXECUTE ON FUNCTION rpc_post_wallet_transaction TO authenticated, service_
 
 ---
 
-### ۴.۲. روال امن انبارداری با قفل ترتیبی، مقداردهی امن و بررسی اینواریانت موجودی آزاد
+### ۴.۲. روال امن انبارداری با قفل ترتیبی، مقداردهی امن، اتمیسیته دفتر کل و کلید ضدتکرار
 ```sql
 CREATE OR REPLACE FUNCTION rpc_record_stock_movement(
     p_warehouse_id UUID,
@@ -350,14 +395,14 @@ BEGIN
         RAISE EXCEPTION 'دسترسی غیرمجاز برای تغییر اسناد انبار.';
     END IF;
 
-    -- ۲. اعتبارسنجی ضدتکرار
+    -- ۲. اعتبارسنجی اولیه ضدتکرار
     IF p_idempotency_key IS NOT NULL THEN
         SELECT id INTO v_movement_id 
         FROM stock_movements 
         WHERE idempotency_key = p_idempotency_key;
         
         IF FOUND THEN
-            RETURN v_movement_id;
+            RETURN v_movement_id; -- بازگشت فوری بدون هیچ‌گونه عوارض جانبی یا تغییر در پروجکشن
         END IF;
     END IF;
 
@@ -372,25 +417,30 @@ BEGIN
     WHERE warehouse_id = p_warehouse_id AND variant_id = p_variant_id
     FOR UPDATE;
 
+    -- بررسی مجدد کلید ضدتکرار پس از اخذ قفل سطری جهت مصونیت از تداخل همزمانی رقابتی
+    IF p_idempotency_key IS NOT NULL THEN
+        SELECT id INTO v_movement_id 
+        FROM stock_movements 
+        WHERE idempotency_key = p_idempotency_key;
+        
+        IF FOUND THEN
+            RETURN v_movement_id;
+        END IF;
+    END IF;
+
     v_new_balance := v_current_stock + p_quantity_change;
     IF v_new_balance < 0 THEN
         RAISE EXCEPTION 'موجودی فیزیکی انبار نمی‌تواند به مقدار منفی تقلیل یابد.';
     END IF;
 
     -- بررسی اینواریانت رزرو: کاهش موجودی فیزیکی نباید آن را کمتر از سهمیه رزروهای فعال کند
-    -- مگر در مواردی که رویداد از نوع فروش سفارش باشد و رزرو همزمان کسر شده باشد
     IF p_movement_type <> 'order_sale' AND v_new_balance < v_reserved_stock THEN
         RAISE EXCEPTION 'تغییر موجودی موجب نقض تعهد رزروهای فعال کالا می‌گردد.';
     END IF;
 
-    -- ۵. به‌روزرسانی پروجکشن موجودی
-    UPDATE warehouse_stock
-    SET quantity_on_hand = v_new_balance,
-        updated_at = NOW()
-    WHERE warehouse_id = p_warehouse_id AND variant_id = p_variant_id;
-
-    -- ۶. ثبت قطعی در دفتر کل کانونیکال با کنترل برخورد همزمان کلید ضدتکرار
+    -- ۵. ثبت در دفتر کل کانونیکال و به‌روزرسانی پروجکشن در یک واحد اتمیک امن
     BEGIN
+        -- الف) درج قطعی در دفتر کل تغییرناپذیر
         INSERT INTO stock_movements (
             warehouse_id, variant_id, quantity_change, balance_after,
             movement_type, reference_type, reference_id, operator_id, 
@@ -400,10 +450,19 @@ BEGIN
             p_movement_type, p_reference_type, p_reference_id, auth.uid(), 
             p_notes, p_idempotency_key
         ) RETURNING id INTO v_movement_id;
+
+        -- ب) به‌روزرسانی پروجکشن موجودی منحصراً پس از ثبت در دفتر کل
+        UPDATE warehouse_stock
+        SET quantity_on_hand = v_new_balance,
+            updated_at = NOW()
+        WHERE warehouse_id = p_warehouse_id AND variant_id = p_variant_id;
     EXCEPTION WHEN unique_violation THEN
+        -- در صورت برخورد کلید ضدتکرار، پروجکشن دست‌نخورده مانده و رکورد قبلی بازگردانده می‌شود
         IF p_idempotency_key IS NOT NULL THEN
             SELECT id INTO v_movement_id FROM stock_movements WHERE idempotency_key = p_idempotency_key;
-            RETURN v_movement_id;
+            IF v_movement_id IS NOT NULL THEN
+                RETURN v_movement_id;
+            END IF;
         END IF;
         RAISE;
     END;
@@ -418,9 +477,9 @@ GRANT EXECUTE ON FUNCTION rpc_record_stock_movement TO authenticated, service_ro
 
 ---
 
-### ۴.۳. بازیابی چندانباره پرداخت دیرهنگام با قفل سراسری ترتیبی و امنیت انحصاری سرور
+### ۴.۳. بازیابی چندانباره پرداخت دیرهنگام با تفکیک دقیق حالات، قفل سطری ترتیبی و امنیت سروری
 > [!IMPORTANT]
-> این تابع منحصراً برای `service_role` یا ادمین ارشد مالی/سفارشات مجاز است. کاربران کلاینت هرگز نمی‌توانند آن را فراخوانی کنند.
+> این تابع منحصراً برای `service_role` یا ادمین ارشد مالی/سفارشات مجاز است. کاربران کلاینت هرگز دسترسی به این تابع ندارند.
 > تراکنش بانکی متناظر باید از پیش در جدول `payment_transactions` تایید و صحت‌سنجی شده باشد.
 
 ```sql
@@ -461,37 +520,83 @@ BEGIN
         RAISE EXCEPTION 'سفارش مورد نظر یافت نشد.';
     END IF;
 
-    -- ۳. بررسی انطباق پرونده پرداخت و تراکنش بانکی معتبر
+    -- ۳. قفل قطعی روی پرونده پرداخت
     SELECT * INTO v_payment FROM payments WHERE order_id = p_order_id FOR UPDATE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'پرونده پرداخت مربوط به این سفارش یافت نشد.';
     END IF;
 
+    -- ۴. قفل قطعی و اعتبارسنجی دقیق تراکنش پرداخت
     SELECT * INTO v_ptx 
     FROM payment_transactions 
-    WHERE id = p_payment_transaction_id AND payment_id = v_payment.id;
+    WHERE id = p_payment_transaction_id 
+    FOR UPDATE;
+
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'تراکنش پرداخت با سفارش مورد نظر مطابقت ندارد.';
+        RAISE EXCEPTION 'تراکنش پرداخت مورد نظر یافت نشد.';
+    END IF;
+
+    IF v_ptx.payment_id <> v_payment.id THEN
+        RAISE EXCEPTION 'تراکنش پرداخت با پرونده پرداخت سفارش مطابقت ندارد.';
+    END IF;
+
+    -- اطمینان از اینکه تراکنش ورودی یک پرداخت خرید اصلی است و نه تراکنش استرداد
+    IF v_ptx.authority_token LIKE 'REFUND-%' OR v_ptx.gateway = 'system_refund' THEN
+        RAISE EXCEPTION 'شناسه ارسالی مربوط به یک تراکنش استرداد است و تراکنش پرداخت خرید نیست.';
     END IF;
 
     -- تراکنش حتماً باید از کانال معتبر بانکی تایید شده باشد
     IF v_ptx.status <> 'verified' THEN
-        RAISE EXCEPTION 'تراکنش بانکی هنوز در درگاه تایید نشده است.';
+        RAISE EXCEPTION 'تراکنش بانکی در درگاه تایید نشده است (وضعیت: %).', v_ptx.status;
     END IF;
 
-    -- ۴. مدیریت حالت‌های مختلف وضعیت سفارش
+    -- اعتبارسنجی انطباق دقیق مبلغ تراکنش با مجموع فاکتور سفارش
+    IF v_ptx.amount_toman <> v_order.total_amount_toman THEN
+        RAISE EXCEPTION 'مبلغ تراکنش پرداخت (%) با مجموع فاکتور سفارش (%) تطابق ندارد.', v_ptx.amount_toman, v_order.total_amount_toman;
+    END IF;
+
+    -- جلوگیری از تخصیص یا پردازش مضاعف یک تراکنش تاییدشده قبلی
+    IF COALESCE((v_ptx.raw_response->>'allocated')::boolean, false) IS TRUE THEN
+        RETURN jsonb_build_object('success', true, 'status', 'already_processed', 'order_status', v_order.status);
+    END IF;
+
+    -- ۵. تفکیک دقیق حالات مختلف وضعیت سفارش
+    -- الف) سفارش قبلاً تسویه شده است (Idempotent Paid)
     IF v_order.status = 'paid' THEN
         RETURN jsonb_build_object('success', true, 'status', 'already_paid');
     END IF;
 
-    IF v_order.status IN ('cancelled', 'refunded', 'stock_exhausted_pending_refund') THEN
-        -- اگر سفارش قبلاً لغو یا مسترد شده، امکان تحویل کالا وجود ندارد؛ ارجاع به فرآیند استرداد
-        UPDATE payments SET status = 'refund_pending' WHERE id = v_payment.id;
-        RETURN jsonb_build_object('success', false, 'action', 'refund_required', 'reason', 'order_status_' || v_order.status);
+    -- ب) سفارش قبلاً مسترد شده است: عدم تغییر وضعیت به refund_pending و بازگشت بدون دستکاری داده
+    IF v_order.status = 'refunded' OR v_payment.status = 'refunded' THEN
+        RETURN jsonb_build_object('success', true, 'status', 'already_refunded', 'message', 'این سفارش قبلاً مسترد شده است و نیازی به تغییر وضعیت ندارد.');
     END IF;
 
-    -- ۵. قفل سراسری و ترتیبی تمام سطرهای موجودی انبارهای فعال (Deterministic Global Lock Ordering)
-    -- این ترتیب‌بندی مانع از بروز بن‌بست در تخصیص‌های چندانباره همزمان می‌شود
+    -- ج) سفارش در حال حاضر در صف استرداد وجه است (بدون درج مجدد تراکنش استرداد)
+    IF v_order.status = 'stock_exhausted_pending_refund' OR v_payment.status = 'refund_pending' THEN
+        RETURN jsonb_build_object('success', false, 'status', 'refund_already_pending', 'message', 'سفارش در صف استرداد وجه قرار دارد و تراکنش استرداد قبلاً صادر شده است.');
+    END IF;
+
+    -- د) سفارش قبل از رسیدن پرداخت منقضی/لغو شده است: ارجاع مستقیم به استرداد
+    IF v_order.status = 'cancelled' THEN
+        UPDATE payments SET status = 'refund_pending', updated_at = NOW() WHERE id = v_payment.id;
+
+        INSERT INTO payment_transactions (
+            payment_id, gateway, amount_toman, authority_token,
+            idempotency_key, status, raw_response
+        ) VALUES (
+            v_payment.id, v_ptx.gateway, v_order.total_amount_toman, 'REFUND-' || p_order_id,
+            'IDEMP-REFUND-CANCELLED-' || p_order_id, 'initiated',
+            jsonb_build_object('reason', 'order_was_cancelled_prior_to_payment', 'original_tx', p_payment_transaction_id)
+        ) RETURNING id INTO v_refund_tx_id;
+
+        UPDATE payment_transactions
+        SET raw_response = COALESCE(raw_response, '{}'::jsonb) || jsonb_build_object('allocated', false, 'reason', 'order_cancelled')
+        WHERE id = v_ptx.id;
+
+        RETURN jsonb_build_object('success', false, 'action', 'refund_queued', 'reason', 'order_was_cancelled', 'refund_tx_id', v_refund_tx_id);
+    END IF;
+
+    -- ۶. قفل سراسری و ترتیبی تمام سطرهای موجودی انبارها برای این اقلام (Deterministic Global Lock Ordering)
     PERFORM ws.warehouse_id, ws.variant_id
     FROM warehouse_stock ws
     JOIN warehouses w ON ws.warehouse_id = w.id
@@ -500,7 +605,7 @@ BEGIN
     ORDER BY ws.warehouse_id ASC, ws.variant_id ASC
     FOR UPDATE;
 
-    -- ۶. استراتژی تجمیع موجودی آزاد در کل انبارها به صورت اتمیک (All-or-None)
+    -- ۷. استراتژی تجمیع موجودی آزاد در کل انبارها به صورت اتمیک (All-or-None)
     FOR v_item IN 
         SELECT variant_id, quantity 
         FROM order_items 
@@ -522,7 +627,6 @@ BEGIN
                 v_take_qty := LEAST(v_needed_qty - v_allocated_qty, v_available);
                 v_allocated_qty := v_allocated_qty + v_take_qty;
                 
-                -- ذخیره گام تخصیص در طرح موقت
                 v_plan := v_plan || jsonb_build_object(
                     'warehouse_id', v_candidate.warehouse_id,
                     'variant_id', v_item.variant_id,
@@ -541,7 +645,7 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- ۷. تصمیم‌گیری نهایی: تخصیص کامل یا استرداد بدون بیش‌فروشی
+    -- ۸. تصمیم‌گیری نهایی: تخصیص کامل بدون بیش‌فروشی یا استرداد تضمین‌شده
     IF v_all_allocated THEN
         -- اجرای طرح تخصیص بر روی پروجکشن و دفتر کل کانونیکال
         FOR v_alloc IN SELECT * FROM jsonb_to_recordset(v_plan) AS (warehouse_id UUID, variant_id UUID, quantity INT) LOOP
@@ -562,23 +666,29 @@ BEGIN
 
         UPDATE orders 
         SET status = 'paid',
-            admin_notes = COALESCE(admin_notes, '') || ' [پرداخت دیرهنگام: تخصیص اتمیک چندانباره موفق]'
+            admin_notes = COALESCE(admin_notes, '') || ' [پرداخت دیرهنگام: تخصیص اتمیک چندانباره موفق]',
+            updated_at = NOW()
         WHERE id = p_order_id;
 
         UPDATE payments 
-        SET status = 'completed', completed_at = NOW() 
+        SET status = 'completed', completed_at = NOW(), updated_at = NOW()
         WHERE id = v_payment.id;
+
+        UPDATE payment_transactions
+        SET raw_response = COALESCE(raw_response, '{}'::jsonb) || jsonb_build_object('allocated', true, 'allocated_at', NOW())
+        WHERE id = v_ptx.id;
 
         RETURN jsonb_build_object('success', true, 'action', 'fulfilled_multi_warehouse', 'plan', v_plan);
     ELSE
-        -- عدم امکان تامین کامل اقلام؛ جلوگیری از بیش‌فروشی و انتقال به صف استرداد
+        -- عدم امکان تامین کامل اقلام؛ جلوگیری قطعی از بیش‌فروشی و انتقال به صف استرداد
         UPDATE orders 
         SET status = 'stock_exhausted_pending_refund',
-            admin_notes = COALESCE(admin_notes, '') || ' [هشدار: کسری موجودی کالا پس از پرداخت دیرهنگام؛ ارجاع به استرداد]'
+            admin_notes = COALESCE(admin_notes, '') || ' [هشدار: کسری موجودی کالا پس از پرداخت دیرهنگام؛ ارجاع به استرداد]',
+            updated_at = NOW()
         WHERE id = p_order_id;
 
         UPDATE payments 
-        SET status = 'refund_pending' 
+        SET status = 'refund_pending', updated_at = NOW()
         WHERE id = v_payment.id;
 
         INSERT INTO payment_transactions (
@@ -590,6 +700,10 @@ BEGIN
             jsonb_build_object('reason', 'stock_exhausted_multi_warehouse', 'original_tx', p_payment_transaction_id)
         ) RETURNING id INTO v_refund_tx_id;
 
+        UPDATE payment_transactions
+        SET raw_response = COALESCE(raw_response, '{}'::jsonb) || jsonb_build_object('allocated', false, 'reason', 'stock_exhausted')
+        WHERE id = v_ptx.id;
+
         INSERT INTO admin_audit_logs (
             actor_id, action, target_entity, target_id, old_data, new_data, ip_address
         ) VALUES (
@@ -599,7 +713,7 @@ BEGIN
             '127.0.0.1'::inet
         );
 
-        RETURN jsonb_build_object('success', false, 'action', 'refund_queued', 'reason', 'insufficient_multi_warehouse_stock');
+        RETURN jsonb_build_object('success', false, 'action', 'refund_queued', 'reason', 'insufficient_multi_warehouse_stock', 'refund_tx_id', v_refund_tx_id);
     END IF;
 END;
 $$;
@@ -611,10 +725,10 @@ GRANT EXECUTE ON FUNCTION rpc_handle_late_payment_callback TO service_role;
 
 ---
 
-### ۴.۴. چرخه کامل، تکرارپذیر و پایاپای استرداد وجه با اعتبارسنجی سروری
+### ۴.۴. چرخه کامل، تکرارپذیر و پایاپای استرداد وجه با اعتبارسنجی سروری و مکانیزم تلاش مجدد پایدار
 ```sql
 CREATE OR REPLACE FUNCTION rpc_process_gateway_refund(
-    p_payment_transaction_id UUID,
+    p_refund_transaction_id UUID,
     p_gateway_refund_ref VARCHAR,
     p_verified_success BOOLEAN,
     p_error_message TEXT DEFAULT NULL,
@@ -628,65 +742,137 @@ AS $$
 DECLARE
     v_tx RECORD;
     v_payment RECORD;
+    v_order RECORD;
     v_is_service_role BOOLEAN := (COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role');
+    v_retry_count INT;
+    v_next_retry TIMESTAMPTZ;
+    v_retry_status VARCHAR;
+    v_existing_tx_id UUID;
+    v_existing_status VARCHAR;
 BEGIN
     -- ۱. کنترل سطح دسترسی سروری
     IF NOT v_is_service_role AND NOT auth.user_has_permission('finance:manage') THEN
         RAISE EXCEPTION 'دسترسی غیرمجاز جهت ثبت یا تایید استرداد وجه.';
     END IF;
 
-    -- ۲. قفل بدبینانه تراکنش استرداد
+    -- ۲. اعتبارسنجی استفاده واقعی از کلید ضدتکرار (Idempotency Protection)
+    IF p_idempotency_key IS NOT NULL THEN
+        SELECT id, status INTO v_existing_tx_id, v_existing_status
+        FROM payment_transactions
+        WHERE raw_response->>'refund_callback_idempotency_key' = p_idempotency_key
+           OR idempotency_key = p_idempotency_key;
+
+        IF FOUND AND v_existing_status = 'verified' THEN
+            RETURN jsonb_build_object(
+                'success', true, 
+                'status', 'already_refunded_verified_idempotent',
+                'transaction_id', v_existing_tx_id
+            );
+        END IF;
+    END IF;
+
+    -- ۳. قفل بدبینانه تراکنش استرداد
     SELECT * INTO v_tx 
     FROM payment_transactions 
-    WHERE id = p_payment_transaction_id 
+    WHERE id = p_refund_transaction_id 
     FOR UPDATE;
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'تراکنش پرداخت یا استرداد مورد نظر یافت نشد.';
+        RAISE EXCEPTION 'تراکنش استرداد مورد نظر یافت نشد.';
     END IF;
 
-    -- ۳. رفتار پایاپای در مواجهه با وب‌هوک یا کال‌بک تکراری
-    IF v_tx.status = 'verified' AND p_verified_success THEN
-        RETURN jsonb_build_object('success', true, 'status', 'already_refunded_verified');
+    -- ۴. بررسی اینکه این تراکنش یک تراکنش استرداد است و نه تراکنش پرداخت اصلی خرید
+    IF v_tx.authority_token NOT LIKE 'REFUND-%' AND 
+       COALESCE(v_tx.raw_response->>'is_refund', 'false') <> 'true' AND
+       v_tx.raw_response->>'reason' IS NULL THEN
+        RAISE EXCEPTION 'خطای اعتبارسنجی: شناسه ارسال شده مربوط به تراکنش استرداد نیست (تراکنش پرداخت اصلی قابل استرداد به عنوان سند مرجع نمی‌باشد).';
     END IF;
 
+    -- ۵. اعتبارسنجی پیوند و وابستگی پرونده پرداخت والد و سفارش
     SELECT * INTO v_payment FROM payments WHERE id = v_tx.payment_id FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'پرونده پرداخت متناظر با این استرداد یافت نشد.';
+    END IF;
 
-    -- ۴. پردازش نتیجه بر اساس تایید قطعی بانکی
+    SELECT * INTO v_order FROM orders WHERE id = v_payment.order_id FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'سفارش متناظر با این پرونده استرداد یافت نشد.';
+    END IF;
+
+    -- ۶. رفتار پایاپای در صورت تایید قبلی (Idempotency Check)
+    IF v_tx.status = 'verified' AND p_verified_success THEN
+        RETURN jsonb_build_object('success', true, 'status', 'already_refunded_verified', 'shaparak_rrn', v_tx.shaparak_rrn);
+    END IF;
+
+    -- ۷. پردازش نتیجه بر اساس تایید قطعی بانکی و مدیریت موفقیت پس از شکست قبلی
     IF p_verified_success THEN
-        -- تنها زمانی وضعیت به refunded تغییر می‌یابد که تایید قطعی بانکی محرز شده باشد
+        -- وضعیت استرداد قطعی شده است (حتی در صورت شکست در تلاش‌های قبلی، رویداد بازیابی ثبت می‌گردد)
         UPDATE payment_transactions
         SET status = 'verified',
             shaparak_rrn = p_gateway_refund_ref,
             verified_at = NOW(),
-            raw_response = COALESCE(raw_response, '{}'::jsonb) || jsonb_build_object('refund_verified', true, 'verified_at', NOW())
-        WHERE id = v_tx.id;
-
-        UPDATE payments
-        SET status = 'refunded'
-        WHERE id = v_payment.id;
-
-        UPDATE orders
-        SET status = 'refunded'
-        WHERE id = v_payment.order_id;
-
-        RETURN jsonb_build_object('success', true, 'status', 'refund_completed');
-    ELSE
-        -- عدم موفقیت در درگاه؛ افزایش شمارنده و ثبت خطا جهت تلاش مجدد در جاب تطبیق
-        UPDATE payment_transactions
-        SET status = 'failed',
             raw_response = COALESCE(raw_response, '{}'::jsonb) || jsonb_build_object(
-                'refund_error', p_error_message,
-                'retry_count', COALESCE((raw_response->>'retry_count')::int, 0) + 1,
-                'last_attempt_at', NOW()
+                'refund_verified', true,
+                'verified_at', NOW(),
+                'recovered_after_failure', (v_tx.status = 'failed'),
+                'refund_callback_idempotency_key', p_idempotency_key
             )
         WHERE id = v_tx.id;
 
         UPDATE payments
-        SET status = 'refund_failed'
+        SET status = 'refunded',
+            updated_at = NOW()
         WHERE id = v_payment.id;
 
-        RETURN jsonb_build_object('success', false, 'status', 'refund_failed_retry_queued', 'error', p_error_message);
+        UPDATE orders
+        SET status = 'refunded',
+            admin_notes = COALESCE(admin_notes, '') || ' [استرداد وجه در درگاه بانکی با موفقیت تایید و تسویه شد]',
+            updated_at = NOW()
+        WHERE id = v_order.id;
+
+        RETURN jsonb_build_object(
+            'success', true, 
+            'status', CASE WHEN v_tx.status = 'failed' THEN 'refund_recovered_after_failure' ELSE 'refund_completed' END,
+            'shaparak_rrn', p_gateway_refund_ref
+        );
+    ELSE
+        -- عدم موفقیت در درگاه؛ محاسبه زمان‌بندی تلاش مجدد پایدار با Exponential Backoff
+        v_retry_count := COALESCE((v_tx.raw_response->>'retry_count')::int, 0) + 1;
+
+        IF v_retry_count >= 5 THEN
+            v_next_retry := NULL;
+            v_retry_status := 'manual_finance_intervention_required';
+        ELSE
+            -- فرمول نمایی تلاش مجدد: 2.5 دقیقه، 5 دقیقه، 10 دقیقه، 20 دقیقه
+            v_next_retry := NOW() + ((POWER(2, v_retry_count) * 2.5) * INTERVAL '1 minute');
+            v_retry_status := 'retry_scheduled';
+        END IF;
+
+        UPDATE payment_transactions
+        SET status = 'failed',
+            raw_response = COALESCE(raw_response, '{}'::jsonb) || jsonb_build_object(
+                'refund_error', p_error_message,
+                'retry_count', v_retry_count,
+                'last_attempt_at', NOW(),
+                'next_retry_at', v_next_retry,
+                'retry_status', v_retry_status,
+                'refund_callback_idempotency_key', p_idempotency_key
+            )
+        WHERE id = v_tx.id;
+
+        UPDATE payments
+        SET status = 'refund_failed',
+            updated_at = NOW()
+        WHERE id = v_payment.id;
+
+        RETURN jsonb_build_object(
+            'success', false,
+            'status', 'refund_failed',
+            'retry_count', v_retry_count,
+            'next_retry_at', v_next_retry,
+            'action', v_retry_status,
+            'error', p_error_message
+        );
     END IF;
 END;
 $$;

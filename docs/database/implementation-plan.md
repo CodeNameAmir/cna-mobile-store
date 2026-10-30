@@ -146,83 +146,50 @@
 ## ۵. استراتژی بازگشت امن و تفکیک‌شده بر حسب محیط (Environment-Safe Rollback Strategy)
 
 > [!WARNING]
-> **ممنوعیت مطلق حذف کلی اسکیما در پروداکشن:**
-> اجرای دستورات تخریبی نظیر `DROP SCHEMA public CASCADE;` در محیط‌های عملیاتی (Production) و پیش‌تولید (Staging) اکیداً ممنوع است. هرگونه بازگشت در این محیط‌ها باید منحصراً از طریق اسکریپت‌های برگشت فازبه‌فاز (`down.sql`) اجرا شود تا تمامیت داده‌های تجاری و سوابق مشتریان حفظ گردد.
+> **ممنوعیت مطلق حذف تخریبی جداول (DROP TABLE CASCADE) در پروداکشن:**
+> اجرای دستورات تخریبی نظیر `DROP SCHEMA public CASCADE;` یا `DROP TABLE ... CASCADE` در محیط‌های عملیاتی (Production) و پیش‌تولید (Staging) اکیداً ممنوع و غیرمجاز است. حذف جداول منجر به نابودی بازگشت‌ناپذیر سوابق مالی، تاریخچه سفارشات مشتریان، تراز کیف پول، دفاتر کل انبارداری و ردیابی IMEI می‌گردد.
 
-### ۵.۱. استراتژی بازگشت فازبه‌فاز در محیط پروداکشن (Granular Phase-by-Phase Rollback)
-برای هر مرحله از مایگریشن، اسکریپت برگشت معکوس تعریف شده و در یک ترنزکشن امن اجرا می‌شود:
+### ۵.۱. استراتژی بازگشت در محیط پروداکشن: مایگریشن‌های جبرانی و رو به جلو (Compensating & Forward-Fix Migrations)
+در محیط عملیاتی، در صورت بروز هرگونه مشکل پس از انتشار نسخه، استراتژی بازگشت منحصراً بر پایه **مایگریشن‌های جبرانی بدون تخریب داده (Non-Destructive Compensating Migrations)** و **سوئیچ‌های عملکردی (Feature Flags)** اجرا می‌شود:
+
+1. **حفظ مطلق جداول اسناد و دفاتر کل:**
+   جداول `orders`, `order_items`, `invoices`, `payments`, `payment_transactions`, `wallets`, `wallet_transactions`, `stock_movements`, `product_serial_units` و `admin_audit_logs` تحت هیچ شرایطی در پروداکشن حذف نمی‌شوند.
+2. **بازگردانی توابع و منطق پردازشی (RPC & Functions):**
+   تغییرات منطق بیزینس و توابع ذخیره‌شده از طریق تعریف مجدد کد نسخه قبلی با دستور `CREATE OR REPLACE FUNCTION` بدون قطعی و بدون تاثیر روی داده‌ها بازگردانده می‌شوند.
+3. **غیرفعال‌سازی از طریق کلیدهای پیکربندی (Feature Flags):**
+   قابلیت‌های جدید ابتدا پشت پرچم‌های ویژگی در جدول `store_settings` فعال می‌شوند و در صورت بروز اشکال، قابلیت ظرف کسری از ثانیه با تغییر مقدار پرچم در سطح تنظیمات خاموش می‌گردد.
+4. **خنثی‌سازی ستون‌ها و ایندکس‌های جدید (Safe Schema Reversal):**
+   ستون‌های الحاقی جدید با دستور `ALTER TABLE ... ALTER COLUMN ... DROP NOT NULL;` سازگار نگه داشته شده و ایندکس‌های مشکل‌ساز با `DROP INDEX CONCURRENTLY IF EXISTS` بدون قفل جدول خارج می‌شوند:
 
 ```sql
--- برگشت فاز ۴ (Finance, Shipping, Settings & RLS)
+-- نمونه مایگریشن جبرانی و ایمن در پروداکشن (بدون تخریب داده‌ها)
 BEGIN;
-  DROP FUNCTION IF EXISTS rpc_process_gateway_refund;
-  DROP FUNCTION IF EXISTS rpc_handle_late_payment_callback;
-  DROP FUNCTION IF EXISTS rpc_post_wallet_transaction;
-  DROP TABLE IF EXISTS payment_transactions CASCADE;
-  DROP TABLE IF EXISTS payments CASCADE;
-  DROP TABLE IF EXISTS invoices CASCADE;
-  DROP TABLE IF EXISTS wallet_transactions CASCADE;
-  DROP TABLE IF EXISTS wallets CASCADE;
-  DROP TABLE IF EXISTS tax_rules CASCADE;
-  DROP TABLE IF EXISTS shipping_methods CASCADE;
-  DROP TABLE IF EXISTS store_settings CASCADE;
-COMMIT;
+  -- ۱. بازگردانی بدنه توابع به نسخه پایدار قبلی
+  CREATE OR REPLACE FUNCTION rpc_post_wallet_transaction(...) ...;
+  CREATE OR REPLACE FUNCTION rpc_record_stock_movement(...) ...;
 
--- برگشت فاز ۳ (Multi-Warehouse, Carts & Orders)
-BEGIN;
-  DROP FUNCTION IF EXISTS rpc_record_stock_movement;
-  DROP FUNCTION IF EXISTS rpc_checkout_order;
-  DROP TRIGGER IF EXISTS trg_set_cna_order_number ON orders;
-  DROP FUNCTION IF EXISTS generate_cna_order_number;
-  DROP SEQUENCE IF EXISTS cna_order_number_seq;
-  DROP TABLE IF EXISTS order_status_history CASCADE;
-  DROP TABLE IF EXISTS order_items CASCADE;
-  DROP TABLE IF EXISTS orders CASCADE;
-  DROP TABLE IF EXISTS cart_items CASCADE;
-  DROP TABLE IF EXISTS carts CASCADE;
-  DROP TABLE IF EXISTS stock_reservations CASCADE;
-  DROP TABLE IF EXISTS stock_movements CASCADE;
-  DROP TABLE IF EXISTS warehouse_stock CASCADE;
-  DROP TABLE IF EXISTS warehouses CASCADE;
-COMMIT;
+  -- ۲. غیرفعال‌سازی موقت ماژول مربوطه در صورت لزوم
+  UPDATE store_settings 
+  SET value = jsonb_set(value, '{features,late_payment_auto_recovery}', 'false'::jsonb)
+  WHERE key = 'features_config';
 
--- برگشت فاز ۲ (Catalog & Taxonomy)
-BEGIN;
-  DROP TABLE IF EXISTS product_variants CASCADE;
-  DROP TABLE IF EXISTS warranties CASCADE;
-  DROP TABLE IF EXISTS product_attribute_values CASCADE;
-  DROP TABLE IF EXISTS category_attributes CASCADE;
-  DROP TABLE IF EXISTS attribute_definitions CASCADE;
-  DROP TABLE IF EXISTS product_images CASCADE;
-  DROP TABLE IF EXISTS products CASCADE;
-  DROP TABLE IF EXISTS brands CASCADE;
-  DROP TABLE IF EXISTS categories CASCADE;
-COMMIT;
-
--- برگشت فاز ۱ (Foundation & RBAC)
-BEGIN;
-  DROP FUNCTION IF EXISTS auth.user_has_permission;
-  DROP FUNCTION IF EXISTS auth.user_has_role;
-  DROP TABLE IF EXISTS user_addresses CASCADE;
-  DROP TABLE IF EXISTS auth_user_roles CASCADE;
-  DROP TABLE IF EXISTS auth_role_permissions CASCADE;
-  DROP TABLE IF EXISTS auth_permissions CASCADE;
-  DROP TABLE IF EXISTS auth_roles CASCADE;
-  DROP TABLE IF EXISTS profiles CASCADE;
+  -- ۳. حذف ایمن و غیرهمگام ایندکس‌های غیرضروری جدید بدون قفل جداول
+  -- DROP INDEX CONCURRENTLY IF EXISTS idx_new_experimental_feature;
 COMMIT;
 ```
 
 ### ۵.۲. پاکسازی صرفاً در سندباکس توسعه محلی با گارد ایمنی (Local Dev Sandbox Only)
-در محیط توسعه محلی، اسکریپت ریست تنها در صورت وجود تاییدیه صریح متغیر محیطی اجرا می‌گردد:
+در محیط توسعه محلی ایزوله، اسکریپت ریست کامل اسکیما منحصراً با شرط سخت‌گیرانه `IS DISTINCT FROM 'development'` مجاز است:
 
 ```sql
 DO $$
 BEGIN
-    -- بررسی گارد ایمنی محیط توسعه
+    -- بررسی گارد ایمنی محیط توسعه (Fail-Closed Guard)
     IF current_setting('app.environment', true) IS DISTINCT FROM 'development' THEN
-        RAISE EXCEPTION 'خطای امنیتی: دستور پاکسازی کلی اسکیما منحصراً در محیط development مجاز است.';
+        RAISE EXCEPTION 'خطای امنیتی بحرانی: بازنشانی تخریبی اسکیما منحصراً در محیط محلی development مجاز است. این عملیات در محیط‌های staging و production مسدود است.';
     END IF;
 
+    -- پاکسازی و بازسازی اسکیما صرفاً در محیط لوکال
     DROP SCHEMA IF EXISTS public CASCADE;
     CREATE SCHEMA public;
     GRANT ALL ON SCHEMA public TO postgres;
@@ -238,7 +205,7 @@ END $$;
 
 > [!IMPORTANT]
 > **محدوده Task 4.2 صرفاً طراحی معماری و مستندسازی است.**
-> هیچ‌یک از سناریوهای SQL زیر در مرحله ۴.۲ اجرا نمی‌شوند. این بخش به عنوان «مشخصات فنی و آزمون‌های پذیرش برای Task 4.3 (دیپلوی پایگاه داده)» طراحی و تدوین شده است تا پس از اعمال مایگریشن در Task 4.3 برای تایید صحت پیاده‌سازی اجرا گردند.
+> هیچ‌یک از سناریوهای SQL زیر در مرحله ۴.۲ اجرا نشده‌اند. این بخش به عنوان «مشخصات فنی و آزمون‌های پذیرش برای Task 4.3 (دیپلوی پایگاه داده)» تدوین شده است تا پس از اعمال مایگریشن در Task 4.3 برای تایید صحت پیاده‌سازی اجرا گردند (Planned Tests Only - Not Executed in Task 4.2).
 
 ### سناریوی ۱: فراخوانی غیرمجاز توابع سروری توسط کلاینت (Unauthorized Server-Only RPC Invocation)
 - **هدف:** اطمینان از مسدود بودن توابع `rpc_handle_late_payment_callback` و `rpc_process_gateway_refund` برای کاربران عادی `authenticated`.
@@ -247,48 +214,75 @@ END $$;
   2. فراخوانی `SELECT rpc_handle_late_payment_callback('<order-id>', '<tx-id>');`
   3. **نتیجه مورد انتظار:** بروز خطای `42501 permission denied for function rpc_handle_late_payment_callback` یا خطای دسترسی صریح `403`.
 
-### سناریوی ۲: کسر همزمان و تکراری از کیف پول (Concurrent Duplicate Wallet Debit & Balance Floor)
-- **هدف:** بررسی اتمیک بودن کسر موجودی، کف مانده صفر، و عملکرد کلید ضدتکرار `idempotency_key`.
+### سناریوی ۲: کسر همزمان و تکراری از کیف پول با کلید یکسان (Concurrent Duplicate Wallet Debit & Race-Safe Idempotency)
+- **هدف:** اطمینان از اینکه اگر درخواست اول کامیت کند و درخواست دوم همزمان با آن با همان کلید ضدتکرار رقابت کند، تراکنش دوم بدون تغییر مضاعف در مانده کیف پول بازگردانده شود.
 - **مشخصات تست:**
   1. کیف پول با مانده ۵۰۰,۰۰۰ تومان.
-  2. دو ترنزکشن همزمان هرکدام برای کسر ۴۰۰,۰۰۰ تومان با دو کلید ضدتکرار مجزا، یا دو درخواست همزمان با یک کلید ضدتکرار یکسان.
-  3. **نتیجه مورد انتظار:** با کلید یکسان، دقیقاً یک تراکنش ثبت شده و شناسه همان برگردانده شود (Idempotent). با دو کلید مجزا، ترنزکشن اول موفق و ترنزکشن دوم به دلیل نقض کف موجودی (`v_new_balance < 0`) با خطای صریح متوقف گردد و مانده هرگز منفی نشود.
+  2. دو ترنزکشن همزمان هرکدام برای کسر ۲۰۰,۰۰۰ تومان با یک کلید ضدتکرار یکسان `IDEMP-WALLET-100`.
+  3. **نتیجه مورد انتظار:** سطر `wallet_transactions` دقیقاً یک‌بار درج می‌شود. شناسه یکسان برگردانده شده و مانده نهایی `wallets.cached_balance_toman` دقیقاً ۳۰۰,۰۰۰ تومان باقی می‌ماند (نه ۱۰۰,۰۰۰ تومان).
 
-### سناریوی ۳: رد درخواست شارژ دلخواه کیف پول توسط کلاینت (Arbitrary Client Wallet Credit Rejection)
+### سناریوی ۳: تلاش دو درخواست مجزا برای پرداخت یک سفارش از کیف پول (Two Different Wallet Requests Targeting Same Order)
+- **هدف:** جلوگیری از پرداخت مضاعف یک سفارش توسط دو درخواست با کلیدهای ضدتکرار متفاوت.
+- **مشخصات تست:**
+  1. سفارش با مبلغ ۳۰۰,۰۰۰ تومان در وضعیت `pending_payment`.
+  2. دو درخواست مجزا با دو کلید ضدتکرار `KEY-A` و `KEY-B` برای پرداخت همین سفارش.
+  3. **نتیجه مورد انتظار:** درخواست اول موفق شده، کیف پول کسر گشته و سفارش `paid` می‌شود؛ درخواست دوم با خطای صریح `'برای این سفارش قبلاً تراکنش پرداخت از کیف پول ثبت شده است.'` یا خطای وضعیت سفارش متوقف شده و هیچ مبلغ اضافی از کیف پول کسر نمی‌شود.
+
+### سناریوی ۴: رد درخواست شارژ دلخواه کیف پول توسط کلاینت (Arbitrary Client Wallet Credit Rejection)
 - **هدف:** جلوگیری از کلاهبرداری و شارژ دستی کیف پول توسط کلاینت.
 - **مشخصات تست:**
   1. کاربر احراز هویت شده عادی فراخوانی `rpc_post_wallet_transaction` را با `p_amount_toman = +10000000` ارسال کند.
   2. **نتیجه مورد انتظار:** رد فوری با خطای: `'عملیات غیرمجاز: شارژ مستقیم کیف پول توسط کلاینت ممنوع است.'`. شارژ مثبت منحصراً از کانال وب‌هوک تایید شده بانکی سرور (`service_role`) پذیرفته می‌شود.
 
-### سناریوی ۴: تخصیص همزمان موجودی انبار و Race Condition (Concurrent Stock Allocation)
-- **هدف:** اثبات عدم ایجاد سستی و خطای Unique Constraint در اثر قفل سطری `INSERT ... ON CONFLICT DO NOTHING` و `SELECT ... FOR UPDATE`.
+### سناریوی ۵: رقابت همزمان در ثبت اسناد گردش انبار با کلید یکسان (Concurrent Duplicate Stock Movement Idempotency)
+- **هدف:** اطمینان از عدم دستکاری پروجکشن موجودی در صورت برخورد کلید ضدتکرار همزمان.
 - **مشخصات تست:**
-  1. دو کارگر/ترنزکشن همزمان برای ایجاد حرکت انبار روی یک کالا در انبار بدون سابقه قبلی در `warehouse_stock`.
-  2. **نتیجه مورد انتظار:** سطر پروجکشن دقیقاً یک‌بار مقداردهی شده، قفل سطری بدبینانه به نوبت تخصیص یافته و اینواریانت `quantity_on_hand >= reserved_qty` بدون تداخل نقض‌ناپذیر بماند.
+  1. کالا دارای ۱۰ عدد موجودی در انبار.
+  2. دو ترنزکشن همزمان برای کاهش ۲ عدد کالا با کلید ضدتکرار یکسان `IDEMP-STOCK-1`.
+  3. **نتیجه مورد انتظار:** سند دفتر کل فقط یک‌بار ثبت شده و `quantity_on_hand` انبار دقیقاً ۸ عدد باقی می‌ماند (نه ۶ عدد).
 
-### سناریوی ۵: تجمیع چندانباره و بازگشت کامل اتمیک در کسری کالا (Multi-Warehouse Aggregation & Atomic Rollback)
+### سناریوی ۶: تجمیع چندانباره و بازگشت کامل اتمیک در کسری کالا (Multi-Warehouse Aggregation & Atomic Rollback)
 - **هدف:** اعتبارسنجی اصل یا همه‌یا‌هیچ (All-or-None) در تخصیص چندانباره.
 - **مشخصات تست:**
   1. سفارش شامل ۲ عدد کالا A و ۱ عدد کالا B.
   2. انبار ۱ دارای ۱ عدد A، انبار ۲ دارای ۱ عدد A. کالا B در هیچ انباری موجود نیست.
   3. **نتیجه مورد انتظار:** هیچ انباری کسر موجودی ثبت نکرده و هیچ سندی در `stock_movements` درج نشود؛ کل ترنزکشن به حالت `stock_exhausted_pending_refund` منتقل گردد بدون کوچک‌ترین بیش‌فروشی.
 
-### سناریوی ۶: وب‌هوک پرداخت دیرهنگام در کسری موجودی (Late Payment Callback with Stock Exhaustion)
-- **هدف:** جلوگیری از تحویل تعهدناپذیر و ثبت ردیف استرداد وجه.
+### سناریوی ۷: وب‌هوک پرداخت دیرهنگام در کسری موجودی (Late Payment Callback with Stock Exhaustion)
+- **هدف:** جلوگیری از تحویل تعهدناپذیر و ثبت ردیف استرداد وجه با توکن استرداد استاندارد.
 - **مشخصات تست:**
   1. رزرو منقضی شده و موجودی انبار به فروش رسیده است. وب‌هوک تاییدیه شاپرک با تاخیر فراخوانی می‌شود.
   2. فراخوانی سروری `rpc_handle_late_payment_callback`.
-  3. **نتیجه مورد انتظار:** سفارش به وضعیت `stock_exhausted_pending_refund` تغییر یافته، سطر جدید استرداد با وضعیت `initiated` در `payment_transactions` ایجاد شده و رویداد امنیتی در `admin_audit_logs` لاگ گردد.
+  3. **نتیجه مورد انتظار:** سفارش به وضعیت `stock_exhausted_pending_refund` تغییر یافته، سطر جدید استرداد با توکن `REFUND-{order_id}` در `payment_transactions` ایجاد شده و رویداد امنیتی در `admin_audit_logs` لاگ گردد.
 
-### سناریوی ۷: تکرار استرداد و وب‌هوک‌های تکراری بانکی (Refund Retry & Idempotency)
-- **هدف:** تضمین رفتار پایاپای در شبکه ناامن بانکی.
+### سناریوی ۸: دریافت کال‌بک پرداخت برای سفارش قبلاً مسترد شده (Late Callback for Already-Refunded Order)
+- **هدف:** اثبات اینکه سفارش مستردشده هرگز به وضعیت `refund_pending` یا `paid` بازنمی‌گردد.
 - **مشخصات تست:**
-  1. ارسال دو وب‌هوک تایید استرداد موفق با رفرنس بانکی مشابه.
-  2. ارسال یک خطا در استرداد بانکی (`p_verified_success = FALSE`).
-  3. **نتیجه مورد انتظار:** وب‌هوک اول وضعیت را به `refunded` می‌رساند؛ وب‌هوک دوم بدون تغییر مجدد، خروجی `already_refunded_verified` برمی‌گرداند؛ در صورت خطا وضعیت به `refund_failed` رفته و شمارنده تلاش مجدد در `raw_response` افزایش می‌یابد.
+  1. سفارشی با وضعیت `refunded` و پرداخت با وضعیت `refunded`.
+  2. ارسال مجدد وب‌هوک پرداخت دیرهنگام برای همین سفارش.
+  3. **نتیجه مورد انتظار:** خروجی تابع به صورت پایاپای `{"success": true, "status": "already_refunded"}` بدون ایجاد هیچ‌گونه تراکنش یا تغییر وضعیت داده‌ها بازگردانده شود.
 
-### سناریوی ۸: آزمون گارد تخریب اسکیما در محیط‌های غیر از Development (Destructive Rollback Guard)
-- **هدف:** ممانعت قطعی از پاکسازی تصادفی پایگاه داده در Staging و Production.
+### سناریوی ۹: رد ارسال تراکنش پرداخت اصلی به عنوان تراکنش استرداد (Invalid Refund Target Transaction Rejection)
+- **هدف:** اطمینان از اینکه تابع `rpc_process_gateway_refund` فقط تراکنش‌های معتبر استرداد را می‌پذیرد و نمی‌توان تراکنش خرید اصلی را به عنوان سند استرداد پاس داد.
+- **مشخصات تست:**
+  1. فراخوانی `rpc_process_gateway_refund` با شناسه یک تراکنش خرید عادی شاپرک (فاقد توکن `REFUND-`).
+  2. **نتیجه مورد انتظار:** رد تراکنش با خطای: `'خطای اعتبارسنجی: شناسه ارسال شده مربوط به تراکنش استرداد نیست'`.
+
+### سناریوی ۱۰: دریافت تاییدیه موفقیت پس از وضعیت شکست قبلی استرداد (Late Success After refund_failed)
+- **هدف:** بازیابی صحیح استرداد در صورتی که بانک در ابتدا خطا داده اما بعداً با تاخیر استرداد را تسویه کرده باشد.
+- **مشخصات تست:**
+  1. تراکنش استرداد قبلاً با خطای بانکی در وضعیت `failed` و پرداخت در وضعیت `refund_failed` قرار گرفته است.
+  2. وب‌هوک پایاپای بانکی با تایید قطعی (`p_verified_success = TRUE`) و شماره مرجع شاپرک دریافت شود.
+  3. **نتیجه مورد انتظار:** تراکنش به `verified` به‌روزرسانی شده، وضعیت سفارش و پرداخت به `refunded` تغییر یابد، متادیتای `recovered_after_failure: true` در `raw_response` ثبت شود و خروجی `refund_recovered_after_failure` حاصل گردد.
+
+### سناریوی ۱۱: زمان‌بندی تلاش مجدد استرداد با رشد نمایی (Refund Retry Scheduling with Exponential Backoff)
+- **هدف:** تضمین افزایش شمارنده خطا و تنظیم فیلد `next_retry_at` برای تلاش‌های ناموفق تا سقف ۵ بار.
+- **مشخصات تست:**
+  1. تراکنش استرداد در وضعیت `initiated` با `p_verified_success = FALSE` و متن خطای بانکی فراخوانی شود.
+  2. **نتیجه مورد انتظار:** شمارنده `retry_count` یک واحد افزایش یافته، `next_retry_at` بر اساس فرمول نمایی تنظیم شود و پس از ۵ بار شکست، وضعیت به `manual_finance_intervention_required` تبدیل گردد.
+
+### سناریوی ۱۲: آزمون گارد تخریب اسکیما در محیط‌های غیر از Development (Destructive Rollback Guard)
+- **هدف:** ممانعت قطعی از پاکسازی تصادفی پایگاه داده در Staging و Production یا در صورت نبود متغیر محیطی.
 - **مشخصات تست:**
   1. اجرای بلوک پاکسازی اسکیما در حالی که `app.environment` تنظیم نشده (NULL) یا برابر `production` است.
-  2. **نتیجه مورد انتظار:** شرط `IS DISTINCT FROM 'development'` صادق شده و بلافاصله با پرتاب خطای `'خطای امنیتی: دستور پاکسازی کلی اسکیما منحصراً در محیط development مجاز است.'` ترنزکشن را متوقف سازد.
+  2. **نتیجه مورد انتظار:** شرط `IS DISTINCT FROM 'development'` صادق شده و بلافاصله با پرتاب خطای `'خطای امنیتی بحرانی: بازنشانی تخریبی اسکیما منحصراً در محیط محلی development مجاز است.'` ترنزکشن را متوقف سازد.

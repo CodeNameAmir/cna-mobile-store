@@ -66,6 +66,7 @@ graph TD
         CPN["coupons"]
         CPU["coupon_usages"]
         LP["loyalty_points"]
+        WSH["wishlists"]
         REV["reviews"]
         TKT["support_tickets"]
         TM["ticket_messages"]
@@ -119,6 +120,7 @@ graph TD
     SHP -->|1:N| STE
     CPN -->|1:N| CPU
     O -->|1:N| CPU
+    P -->|1:N| WSH
 ```
 
 ---
