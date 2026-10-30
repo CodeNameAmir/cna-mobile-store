@@ -6,7 +6,7 @@
 
 import { Product, FilterState } from '../types';
 import { PRODUCTS } from './mockData';
-import { DATA_SOURCE } from './config';
+import { DATA_SOURCE, assertValidDataSource } from './config';
 import { supabaseGateway } from './supabaseClient';
 
 const LOCAL_PRODUCTS_KEY = 'cna_store_products_v1';
@@ -64,6 +64,7 @@ export const productService = {
    * Fetch all products with simulated network latency in mock mode or live Supabase query
    */
   async getProducts(filters?: Partial<FilterState>): Promise<Product[]> {
+    assertValidDataSource();
     if (DATA_SOURCE === 'supabase') {
       const client = supabaseGateway.getClient();
       const { data, error } = await client.from('products').select('*');
@@ -112,6 +113,7 @@ export const productService = {
    * Get single product by slug
    */
   async getProductBySlug(slug: string): Promise<Product | null> {
+    assertValidDataSource();
     if (DATA_SOURCE === 'supabase') {
       const client = supabaseGateway.getClient();
       const { data, error } = await client.from('products').select('*').eq('slug', slug).single();
@@ -131,6 +133,7 @@ export const productService = {
    * Update product stock (used when admin changes inventory or an order is processed)
    */
   async updateStock(productId: string, newStock: number): Promise<Product> {
+    assertValidDataSource();
     if (DATA_SOURCE === 'supabase') {
       throw new Error('ویرایش موجودی در حالت زنده باید از طریق توابع اتمیک سمت سرور انجام شود.');
     }
@@ -157,6 +160,7 @@ export const productService = {
    * Update product price (Toman integer)
    */
   async updatePrice(productId: string, newPriceToman: number): Promise<Product> {
+    assertValidDataSource();
     if (DATA_SOURCE === 'supabase') {
       throw new Error('ویرایش قیمت در حالت زنده باید در محیط امن سرور انجام شود.');
     }

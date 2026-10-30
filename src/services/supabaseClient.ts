@@ -189,13 +189,27 @@ export async function testAuthHealth(timeoutMs: number = 5000): Promise<Stage2Au
     let payload: unknown;
     try {
       payload = await response.json();
-    } catch {
-      return {
-        status: 'FAILED',
-        latencyMs: Math.round(performance.now() - startTime),
-        errorType: 'INVALID_PAYLOAD',
-        message: 'محتوای پاسخ اندپوینت سلامت فاقد قالب معتبر JSON بود (خطای تجزیه داده).',
-      };
+    } catch (parseErr: unknown) {
+      // 1. If timeout expired while reading the response stream, rethrow AbortError so outer catch classifies it as TIMEOUT
+      if (
+        (parseErr instanceof DOMException && parseErr.name === 'AbortError') ||
+        (parseErr as { name?: string })?.name === 'AbortError'
+      ) {
+        throw parseErr;
+      }
+
+      // 2. A genuine SyntaxError caused by malformed JSON remains INVALID_PAYLOAD
+      if (parseErr instanceof SyntaxError) {
+        return {
+          status: 'FAILED',
+          latencyMs: Math.round(performance.now() - startTime),
+          errorType: 'INVALID_PAYLOAD',
+          message: 'محتوای پاسخ اندپوینت سلامت فاقد قالب معتبر JSON بود (خطای تجزیه داده).',
+        };
+      }
+
+      // 3. Any other unexpected error (e.g. stream network drop) is rethrown to outer catch
+      throw parseErr;
     }
 
     // Verify response content: name must be 'GoTrue' and version must be non-empty string
@@ -224,7 +238,10 @@ export async function testAuthHealth(timeoutMs: number = 5000): Promise<Stage2Au
   } catch (err: unknown) {
     const latencyMs = Math.round(performance.now() - startTime);
 
-    if (err instanceof DOMException && err.name === 'AbortError') {
+    if (
+      (err instanceof DOMException && err.name === 'AbortError') ||
+      (err as { name?: string })?.name === 'AbortError'
+    ) {
       return {
         status: 'FAILED',
         latencyMs,

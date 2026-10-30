@@ -42,6 +42,16 @@ export const DATA_SOURCE_ERROR: string | undefined = !IS_DATA_SOURCE_VALID
 // Export active DATA_SOURCE. If invalid, keep 'mock' as runtime type fallback while exposing error in validateSupabaseConfig.
 export const DATA_SOURCE: DataSourceType = normalizedSource === 'supabase' ? 'supabase' : 'mock';
 
+/**
+ * Asserts that VITE_DATA_SOURCE is valid.
+ * Throws an explicit configuration error if an unknown non-empty value was provided.
+ */
+export function assertValidDataSource(): void {
+  if (!IS_DATA_SOURCE_VALID) {
+    throw new Error(`[CNA Config] ${DATA_SOURCE_ERROR}`);
+  }
+}
+
 // 2. Production Environment Check
 export const IS_PRODUCTION: boolean =
   typeof import.meta !== 'undefined' && import.meta.env ? Boolean(import.meta.env.PROD) : false;

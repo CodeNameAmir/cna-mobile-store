@@ -5,11 +5,12 @@
 
 import { Category } from '../types';
 import { CATEGORIES } from './mockData';
-import { DATA_SOURCE } from './config';
+import { DATA_SOURCE, assertValidDataSource } from './config';
 import { supabaseGateway } from './supabaseClient';
 
 export const categoryService = {
   async getCategories(): Promise<Category[]> {
+    assertValidDataSource();
     if (DATA_SOURCE === 'supabase') {
       const client = supabaseGateway.getClient();
       const { data, error } = await client.from('categories').select('*');
