@@ -761,8 +761,7 @@ GRANT EXECUTE ON FUNCTION rpc_handle_late_payment_callback TO service_role;
 > ۱. **مرحله اول (Stage 1 — Durable Reservation & Initiation):** تابع `rpc_initiate_gateway_refund` با اخذ قفل‌های بدبینانه والد، اعتبارسنجی دقیق سقف تجمعی بر اساس تلاش‌های فعال و تاییدشده، درج رکورد در جدول کانونیکال `payment_refund_attempts` با وضعیت `initiated` و کامیت تراکنش پایگاه داده.
 > ۲. **مرحله میانی (External Bank Dispatch):** ارسال درخواست HTTP به سوئیچ درگاه بانکی/شاپرک توسط سرور پشتیبان، **خارج از هرگونه تراکنش و قفل پایگاه داده** (جلوگیری مطلق از Connection Pool Exhaustion و بن‌بست‌های سیستمی).
 > ۳. **مرحله دوم (Stage 2 — Settlement & Finalization):** تابع `rpc_finalize_gateway_refund` با تطبیق هویت ۶گانه و سخت‌گیرانه، دریافت نتیجه قطعی (`verified` یا `failed`) یا پیامد نامشخص (`uncertain`)، و ثبت تغییرات مالی نهایی.
-> 
-> *توجه:* تابع یک‌مرحله‌ای قدیمی `rpc_process_gateway_refund` به دلیل نقض اصل تفکیک مرز تراکنش، به عنوان یک مسیر عملیاتی در پروداکشن **کاملاً منسوخ (`DEPRECATED`)** اعلام شده و صرفاً به عنوان یک پوشش سازگاری در تست‌های خودکار که به طور مستقیم توابع دومرحله‌ای را فراخوانی می‌کند، حفظ گردیده است.
+> *توجه امنیتی بحرانی:* تابع یک‌مرحله‌ای قدیمی `rpc_process_gateway_refund` به دلیل نقض اصل تفکیک مرز تراکنش پایگاه داده و خطر مسدودسازی استخر اتصالات، **به طور کامل غیرفعال و مسدود گردیده (`INCAPACITATED & ACCESS REVOKED`)** است. کلیه مجوزهای اجرای آن از تمام نقش‌ها (از جمله `service_role`، `authenticated` و `PUBLIC`) لغو شده و بدنه آن به صدور خطای صریح محدود شده است. هیچ درخواست استردادی امکان اجرای تک‌مرحله‌ای یا دور زدن چرخه دومرحله‌ای بادوام را ندارد.
 
 ```sql
 -- ============================================================================
@@ -867,6 +866,12 @@ BEGIN
 
     IF v_parent_ptx.transaction_type <> 'payment' OR v_parent_ptx.status <> 'verified' THEN
         RAISE EXCEPTION 'تراکنش والد باید یک پرداخت خرید قطعی و تاییدشده باشد (نوع: %، وضعیت: %).', v_parent_ptx.transaction_type, v_parent_ptx.status;
+    END IF;
+
+    -- اعتبارسنجی انطباق هویت پرونده پرداخت تراکنش استرداد و تراکنش خرید والد (Parent & Refund Payment Identity Equality)
+    IF v_tx.payment_id IS NULL OR v_parent_ptx.payment_id IS NULL OR v_parent_ptx.payment_id IS DISTINCT FROM v_tx.payment_id THEN
+        RAISE EXCEPTION 'خطای یکپارچگی ارجاعی و تطبیق هویت پرداخت: تراکنش استرداد (پرونده پرداخت: %) و تراکنش خرید والد (پرونده پرداخت: %) متعلق به دو پرونده پرداخت متفاوت هستند یا مقدار شناسه پرداخت نامعتبر است.',
+            COALESCE(v_tx.payment_id::TEXT, 'NULL'), COALESCE(v_parent_ptx.payment_id::TEXT, 'NULL');
     END IF;
 
     -- ۸. بررسی مجدد ضدتکرار در جدول کانونیکال تلاش‌ها پس از استقرار قفل والد (Post-Lock Idempotency Check)
@@ -1171,7 +1176,13 @@ BEGIN
             v_parent_ptx.transaction_type, v_parent_ptx.status;
     END IF;
 
-    -- تطبیق هویت شرط ۶: اعتبارسنجی و قفل پرونده پرداخت و سفارش متناظر
+    -- تطبیق هویت شرط ۶: انطباق دقیق هویت پرونده پرداخت تراکنش استرداد با تراکنش خرید والد (Parent & Refund Payment Identity Equality)
+    IF v_tx.payment_id IS NULL OR v_parent_ptx.payment_id IS NULL OR v_parent_ptx.payment_id IS DISTINCT FROM v_tx.payment_id THEN
+        RAISE EXCEPTION 'خطای یکپارچگی ارجاعی و تطبیق هویت پرداخت: تراکنش استرداد (پرونده پرداخت: %) و تراکنش خرید والد (پرونده پرداخت: %) متعلق به دو پرونده پرداخت متفاوت هستند یا مقدار شناسه پرداخت نامعتبر است.',
+            COALESCE(v_tx.payment_id::TEXT, 'NULL'), COALESCE(v_parent_ptx.payment_id::TEXT, 'NULL');
+    END IF;
+
+    -- تطبیق هویت شرط ۷: اعتبارسنجی و قفل پرونده پرداخت و سفارش متناظر
     IF v_tx.payment_id IS NULL THEN
         RAISE EXCEPTION 'خطای یکپارچگی: تراکنش استرداد فاقد ارجاع به پرونده پرداخت (payment_id) است.';
     END IF;
@@ -1354,12 +1365,15 @@ REVOKE EXECUTE ON FUNCTION rpc_finalize_gateway_refund FROM PUBLIC, authenticate
 GRANT EXECUTE ON FUNCTION rpc_finalize_gateway_refund TO service_role;
 
 -- ============================================================================
--- [DEPRECATED] روال منسوخ‌شده هماهنگ‌کننده یکپارچه استرداد (Compatibility Test Harness Only)
+-- [INCAPACITATED / DEPRECATED] روال منسوخ‌شده و غیرفعال استرداد تک‌مرحله‌ای (Revoked & Disabled)
 -- ============================================================================
--- هشدار معماری: این تابع صرفاً جهت حفظ سازگاری با آزمون‌های قدیمی نگهداری شده است
--- و در محیط عملیاتی نباید فراخوانی شود. این تابع به هیچ وجه قادر به دور زدن قوانین
--- رزرو پایدار مرحله اول، تفکیک دیسپچ شبکه یا تطبیق مغایرت‌های نامشخص نیست
--- و منطق آن دقیقاً به اجرای متوالی توابع رسمی rpc_initiate و rpc_finalize متصل است.
+-- هشدار معماری و امنیتی: این تابع به دلیل نقض مرز اعتماد، ایجاد قفل‌های باز در طول فراخوانی شبکه و
+-- آسیب‌پذیری ناشی از اجرای تک‌مرحله‌ای در دیتابیس، به طور کامل غیرفعال و بدنه اجرایی آن مسدود شده است.
+-- تمام مجوزهای اجرایی آن لغو گردیده و اجرای آن توسط هر نقشی (حتی service_role) با خطای صریح متوقف می‌شود.
+-- گردش‌کار رسمی، کانونیکال و انحصاری استرداد وجه منحصراً به صورت چرخه دومرحله‌ای بادوام اجرا می‌گردد:
+-- ۱. rpc_initiate_gateway_refund (رزرو سهمیه مالی و ثبت تلاش با کامیت فوری در دیتابیس)
+-- ۲. ارسال درخواست به وب‌سرویس بانک خارج از تراکنش دیتابیس (External HTTP Dispatch via Backend)
+-- ۳. rpc_finalize_gateway_refund (نهایی‌سازی قطعی وضعیت مالی بر اساس پیامد دریافتی از شاپرک/درگاه)
 CREATE OR REPLACE FUNCTION rpc_process_gateway_refund(
     p_refund_transaction_id UUID,
     p_gateway_refund_ref VARCHAR,
@@ -1373,41 +1387,12 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-DECLARE
-    v_init_res JSONB;
-    v_outcome VARCHAR;
 BEGIN
-    -- ۱. هدایت به مرحله اول کانونیکال (Stage 1 Durable Reservation)
-    v_init_res := rpc_initiate_gateway_refund(p_refund_transaction_id, p_idempotency_key, p_attempt_id);
-
-    -- اگر درخواست تکراری ضدتکرار شناسایی شد، همان نتیجه پیشین بازگردانده می‌شود
-    IF (v_init_res->>'status') = 'idempotent_duplicate_request' THEN
-        RETURN v_init_res;
-    END IF;
-
-    -- ۲. تعیین وضعیت پیامد بانکی
-    IF p_verified_success THEN
-        v_outcome := 'verified';
-    ELSIF p_error_message IN ('timeout', 'network_error', 'indeterminate') THEN
-        v_outcome := 'uncertain';
-    ELSE
-        v_outcome := 'failed';
-    END IF;
-
-    -- ۳. هدایت به مرحله دوم کانونیکال با تطبیق دقیق هویت (Stage 2 Finalization)
-    RETURN rpc_finalize_gateway_refund(
-        p_refund_transaction_id,
-        p_attempt_id,
-        p_idempotency_key,
-        p_gateway_refund_ref,
-        v_outcome,
-        p_error_message
-    );
+    RAISE EXCEPTION 'عملیات غیرمجاز: روال یک‌مرحله‌ای rpc_process_gateway_refund به طور کامل غیرفعال و مسدود شده است. فرآیند استرداد وجه منحصراً باید از طریق چرخه دومرحله‌ای تفکیک‌شده (rpc_initiate_gateway_refund -> فراخوانی وب‌سرویس بانک خارج از دیتابیس -> rpc_finalize_gateway_refund) اجرا گردد.';
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION rpc_process_gateway_refund FROM PUBLIC, authenticated;
-GRANT EXECUTE ON FUNCTION rpc_process_gateway_refund TO service_role;
+REVOKE ALL ON FUNCTION rpc_process_gateway_refund FROM PUBLIC, authenticated, service_role;
 ```
 
 ---
