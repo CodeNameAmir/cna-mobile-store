@@ -614,7 +614,7 @@ BEGIN
         ) VALUES (
             v_payment.id, v_ptx.id, 'refund', v_ptx.gateway, v_order.total_amount_toman, 'REFUND-' || p_order_id,
             'IDEMP-REFUND-CANCELLED-' || p_order_id, 'initiated',
-            jsonb_build_object('reason', 'order_was_cancelled_prior_to_payment', 'original_tx', p_payment_transaction_id, 'refund_attempts', '[]'::jsonb)
+            jsonb_build_object('reason', 'order_was_cancelled_prior_to_payment', 'original_tx', p_payment_transaction_id)
         ) RETURNING id INTO v_refund_tx_id;
 
         UPDATE payment_transactions
@@ -725,7 +725,7 @@ BEGIN
         ) VALUES (
             v_payment.id, v_ptx.id, 'refund', v_ptx.gateway, v_order.total_amount_toman, 'REFUND-' || p_order_id,
             'IDEMP-REFUND-LATE-' || p_order_id, 'initiated',
-            jsonb_build_object('reason', 'stock_exhausted_multi_warehouse', 'original_tx', p_payment_transaction_id, 'refund_attempts', '[]'::jsonb)
+            jsonb_build_object('reason', 'stock_exhausted_multi_warehouse', 'original_tx', p_payment_transaction_id)
         ) RETURNING id INTO v_refund_tx_id;
 
         UPDATE payment_transactions
@@ -753,8 +753,515 @@ GRANT EXECUTE ON FUNCTION rpc_handle_late_payment_callback TO service_role;
 
 ---
 
-#### ۴.۴. چرخه کامل، تکرارپذیر و پایاپای استرداد وجه با اعتبارسنجی ساختاریافته، سقف تجمعی و جدول کانونیکال تلاش‌ها
+#### ۴.۴. چرخه کامل، تکرارپذیر، دومرحله‌ای و پایاپای استرداد وجه (Durable Two-Stage Fault-Tolerant Refund Architecture)
+
+> [!IMPORTANT]
+> **ممنوعیت مطلق باز نگه داشتن تراکنش و قفل‌های دیتابیس در طول فراخوانی وب‌سرویس بانک:**
+> ارسال درخواست شبکه HTTP به سوئیچ درگاه بانکی درون یک تراکنش باز پایگاه داده اکیداً ممنوع است؛ زیرا تاخیر شبکه، کندی سوئیچ بانکی یا بروز قطعی می‌تواند قفل‌های سطری (`FOR UPDATE`) را برای ثانیه‌ها یا دقایق باز نگه داشته و منجر به خفگی استخر اتصالات (Connection Pool Exhaustion) و قفل زنجیره‌ای کل سیستم گردد.
+> به همین دلیل، معماری استرداد در CNA به صورت **دو مرحله‌ای پایدار و غیرهمگام (Durable Two-Stage Workflow)** طراحی شده است:
+> ۱. **مرحله اول (Stage 1 — Reserve & Initiate):** تابع `rpc_initiate_gateway_refund` ابتدا قفل‌های والد را اخذ کرده، سقف تجمعی را محاسبه، سطر تلاش اولیه را با وضعیت `initiated` در جدول کانونیکال `payment_refund_attempts` و تراکنش را با وضعیت `initiated` درج/به‌روزرسانی کرده و تراکنش دیتابیس را **کامیت (Commit)** می‌کند. این امر رزرو مالی را پیش از ارسال به بانک قطعی و پایدار می‌سازد.
+> ۲. **مرحله میانی (External Dispatch):** سرور پشتیبان، وب‌سرویس درگاه شاپرک/بانک را در خارج از تراکنش دیتابیس فراخوانی می‌کند.
+> ۳. **مرحله دوم (Stage 2 — Dispatch & Finalize / Reconcile):** تابع `rpc_finalize_gateway_refund` با دریافت نتیجه قطعی (`verified` یا `failed`) یا اعلام وضعیت نامشخص (`uncertain` جهت Reconciliation)، وضعیت تلاش و تراکنش‌ها را نهایی می‌سازد.
+> ۴. **روال هماهنگ‌کننده یکپارچه (`rpc_process_gateway_refund`):** جهت سازگاری و تست‌های خودکار، تابع یکپارچه نیز کلیه قوانین ممانعت از Replay تراکنش‌های تاییدشده، سقف تجمعی ۴گانه و مدیریت همزمانی با `unique_violation` را اعمال می‌نماید.
+
 ```sql
+-- ============================================================================
+-- تابع مرحله اول: رزرو پایدار سهمیه مالی و ثبت آغاز تلاش استرداد (Stage 1)
+-- ============================================================================
+CREATE OR REPLACE FUNCTION rpc_initiate_gateway_refund(
+    p_refund_transaction_id UUID,
+    p_idempotency_key VARCHAR,
+    p_attempt_id UUID DEFAULT gen_random_uuid()
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_tx RECORD;
+    v_parent_ptx RECORD;
+    v_payment RECORD;
+    v_order RECORD;
+    v_is_service_role BOOLEAN := (COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role');
+    v_existing_pra RECORD;
+    v_attempt_row_id UUID;
+    v_other_verified_toman BIGINT;
+    v_other_initiated_toman BIGINT;
+    v_total_committed_toman BIGINT;
+BEGIN
+    -- ۱. اعتبارسنجی اجباری بودن کلید ضدتکرار (Mandatory Idempotency Key Validation)
+    IF p_idempotency_key IS NULL OR TRIM(p_idempotency_key) = '' THEN
+        RAISE EXCEPTION 'خطای اعتبارسنجی: پارامتر کلید ضدتکرار (p_idempotency_key) اجباری است و نمی‌تواند NULL یا خالی باشد.';
+    END IF;
+
+    IF p_attempt_id IS NULL THEN
+        p_attempt_id := gen_random_uuid();
+    END IF;
+
+    -- ۲. کنترل سطح دسترسی سروری و مرز اعتماد (Server-Only Trust Boundary)
+    IF NOT v_is_service_role AND NOT auth.user_has_permission('finance:manage') THEN
+        RAISE EXCEPTION 'دسترسی غیرمجاز: اجرای فرآیند رزرو و آغاز استرداد منحصراً توسط سرویس سروری مورد اعتماد (service_role) یا مدیر ارشد مالی مجاز است.';
+    END IF;
+
+    -- ۳. قفل بدبینانه تراکنش استرداد جاری
+    SELECT * INTO v_tx 
+    FROM payment_transactions 
+    WHERE id = p_refund_transaction_id 
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'تراکنش استرداد مورد نظر یافت نشد.';
+    END IF;
+
+    -- ۴. اعتبارسنجی ساختاریافته نوع تراکنش
+    IF v_tx.transaction_type IS NULL OR v_tx.transaction_type <> 'refund' THEN
+        RAISE EXCEPTION 'خطای اعتبارسنجی: تراکنش ارسالی از نوع استرداد (refund) نمی‌باشد (نوع فعلی: %).', COALESCE(v_tx.transaction_type, 'NULL');
+    END IF;
+
+    -- ۵. ممانعت قطعی از تکرار روی تراکنش استرداد تاییدشده (Issue A: Prevent Replay on Already Verified Refund)
+    IF v_tx.status = 'verified' THEN
+        SELECT * INTO v_existing_pra
+        FROM payment_refund_attempts
+        WHERE refund_transaction_id = v_tx.id AND idempotency_key = p_idempotency_key;
+
+        IF FOUND THEN
+            RETURN jsonb_build_object(
+                'success', true,
+                'status', 'idempotent_duplicate_request',
+                'refund_status', 'already_verified',
+                'attempt_id', v_existing_pra.attempt_id,
+                'attempt_status', v_existing_pra.status,
+                'message', 'تراکنش استرداد قبلاً با همین کلید ضدتکرار با موفقیت تسویه و تایید شده است (پاسخ ذخیره‌شده بازگردانده شد).',
+                'original_attempt', jsonb_build_object(
+                    'id', v_existing_pra.id,
+                    'attempt_id', v_existing_pra.attempt_id,
+                    'status', v_existing_pra.status,
+                    'completed_at', v_existing_pra.completed_at,
+                    'response_payload', v_existing_pra.response_payload
+                )
+            );
+        ELSE
+            RAISE EXCEPTION 'خطای امنیتی و مالی: تراکنش استرداد جاری (%) قبلاً با موفقیت تسویه و تایید نهایی شده است (وضعیت verified). امکان پردازش یا آغاز تلاش مجدد با کلید جدید برای تراکنش تاییدشده وجود ندارد.', v_tx.id;
+        END IF;
+    END IF;
+
+    -- ۶. اعتبارسنجی وضعیت مجاز تراکنش استرداد برای آغاز تلاش
+    IF v_tx.status NOT IN ('initiated', 'failed') THEN
+        RAISE EXCEPTION 'وضعیت نامعتبر تراکنش استرداد: تراکنش در وضعیت "%" امکان پذیرش تلاش استرداد جدید را ندارد. صرفاً وضعیت‌های initiated و failed مجاز به ثبت تلاش هستند.', v_tx.status;
+    END IF;
+
+    -- ۷. اعتبارسنجی و قفل بدبینانه تراکنش خرید والد (Deterministic Lock Ordering)
+    IF v_tx.parent_transaction_id IS NULL THEN
+        RAISE EXCEPTION 'خطای یکپارچگی ارجاعی: تراکنش استرداد فاقد ارجاع به تراکنش خرید والد (parent_transaction_id) است.';
+    END IF;
+
+    SELECT * INTO v_parent_ptx 
+    FROM payment_transactions 
+    WHERE id = v_tx.parent_transaction_id 
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'تراکنش پرداخت خرید والد یافت نشد.';
+    END IF;
+
+    IF v_parent_ptx.transaction_type <> 'payment' OR v_parent_ptx.status <> 'verified' THEN
+        RAISE EXCEPTION 'تراکنش والد باید یک پرداخت خرید قطعی و تاییدشده باشد (نوع: %، وضعیت: %).', v_parent_ptx.transaction_type, v_parent_ptx.status;
+    END IF;
+
+    -- ۸. بررسی مجدد ضدتکرار در جدول کانونیکال تلاش‌ها پس از استقرار قفل والد (Issue C: Post-Lock Idempotency Check)
+    SELECT * INTO v_existing_pra 
+    FROM payment_refund_attempts 
+    WHERE idempotency_key = p_idempotency_key;
+
+    IF FOUND THEN
+        IF v_existing_pra.refund_transaction_id <> p_refund_transaction_id THEN
+            RAISE EXCEPTION 'خطای امنیتی: کلید ضدتکرار ارسالی قبلاً برای تراکنش استرداد دیگری (%) ثبت شده است.', v_existing_pra.refund_transaction_id;
+        END IF;
+
+        RETURN jsonb_build_object(
+            'success', (v_existing_pra.status = 'verified'),
+            'status', 'idempotent_duplicate_request',
+            'attempt_id', v_existing_pra.attempt_id,
+            'attempt_status', v_existing_pra.status,
+            'message', 'درخواست آغاز استرداد با کلید ضدتکرار تکراری دریافت شد؛ رکورد تلاش موجود بازگردانده شد.',
+            'original_attempt', jsonb_build_object(
+                'id', v_existing_pra.id,
+                'attempt_id', v_existing_pra.attempt_id,
+                'status', v_existing_pra.status,
+                'completed_at', v_existing_pra.completed_at,
+                'response_payload', v_existing_pra.response_payload
+            )
+        );
+    END IF;
+
+    -- ۹. محاسبه دقیق سقف تجمعی استرداد با تفکیک ۴ دسته (Cumulative Refund Limit - 4 Distinct Categories)
+    -- دسته ۱: سایر تراکنش‌های استرداد تاییدشده والد (pt.id <> v_tx.id AND pt.status = 'verified')
+    -- دسته ۲: سایر تراکنش‌های استرداد فعال در حال پردازش والد (pt.id <> v_tx.id AND pt.status = 'initiated')
+    -- دسته ۳: مبلغ همین تراکنش استرداد جاری (v_tx.amount_toman)
+    -- دسته ۴: تلاش‌های قبلی ناموفق همین تراکنش (failed) که تعهد مالی اضافی ایجاد نمی‌کنند
+    SELECT 
+        COALESCE(SUM(CASE 
+            WHEN pt.status = 'verified' OR EXISTS (
+                SELECT 1 FROM payment_refund_attempts pra 
+                WHERE pra.refund_transaction_id = pt.id AND pra.status = 'verified'
+            ) THEN pt.amount_toman 
+            ELSE 0 
+        END), 0),
+        COALESCE(SUM(CASE 
+            WHEN (pt.status = 'initiated' OR EXISTS (
+                SELECT 1 FROM payment_refund_attempts pra 
+                WHERE pra.refund_transaction_id = pt.id AND pra.status = 'initiated'
+            )) AND pt.status <> 'verified' AND pt.status <> 'failed' AND NOT EXISTS (
+                SELECT 1 FROM payment_refund_attempts pra 
+                WHERE pra.refund_transaction_id = pt.id AND pra.status IN ('verified', 'failed')
+            ) THEN pt.amount_toman 
+            ELSE 0 
+        END), 0)
+    INTO v_other_verified_toman, v_other_initiated_toman
+    FROM payment_transactions pt
+    WHERE pt.parent_transaction_id = v_parent_ptx.id
+      AND pt.transaction_type = 'refund'
+      AND pt.id <> v_tx.id;
+
+    v_total_committed_toman := v_other_verified_toman + v_other_initiated_toman;
+
+    -- بررسی اینکه مجموع تعهدات قبلی به اضافه مبلغ استرداد فعلی از کل مبلغ پرداخت اصلی فراتر نرود
+    IF (v_total_committed_toman + v_tx.amount_toman) > v_parent_ptx.amount_toman THEN
+        RAISE EXCEPTION 'تخطی از سقف استرداد: مجموع استردادهای تاییدشده قبلی (%) و تعهدات فعال جاری (%) به همراه مبلغ استرداد فعلی (%) از کل مبلغ پرداخت اصلی (%) فراتر می‌رود.',
+            v_other_verified_toman, v_other_initiated_toman, v_tx.amount_toman, v_parent_ptx.amount_toman;
+    END IF;
+
+    -- ۱۰. اعتبارسنجی پرونده پرداخت و سفارش
+    SELECT * INTO v_payment FROM payments WHERE id = v_tx.payment_id FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'پرونده پرداخت متناظر با این استرداد یافت نشد.';
+    END IF;
+
+    SELECT * INTO v_order FROM orders WHERE id = v_payment.order_id FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'سفارش متناظر با این پرونده استرداد یافت نشد.';
+    END IF;
+
+    -- ۱۱. درج تلاش جدید در وضعیت initiated با مدیریت خطای برخورد همزمان (Issue C: Concurrency-Safe unique_violation Trap)
+    BEGIN
+        INSERT INTO payment_refund_attempts (
+            refund_transaction_id,
+            attempt_id,
+            idempotency_key,
+            status,
+            request_payload,
+            created_at
+        ) VALUES (
+            v_tx.id,
+            p_attempt_id,
+            p_idempotency_key,
+            'initiated',
+            jsonb_build_object(
+                'amount_toman', v_tx.amount_toman,
+                'gateway', v_tx.gateway,
+                'parent_transaction_id', v_parent_ptx.id,
+                'payment_id', v_payment.id,
+                'order_id', v_order.id,
+                'initiated_at', NOW()
+            ),
+            NOW()
+        ) RETURNING id INTO v_attempt_row_id;
+    EXCEPTION WHEN unique_violation THEN
+        SELECT * INTO v_existing_pra
+        FROM payment_refund_attempts
+        WHERE idempotency_key = p_idempotency_key;
+
+        IF FOUND THEN
+            RETURN jsonb_build_object(
+                'success', (v_existing_pra.status = 'verified'),
+                'status', 'idempotent_duplicate_request',
+                'attempt_id', v_existing_pra.attempt_id,
+                'attempt_status', v_existing_pra.status,
+                'message', 'درخواست همزمان با کلید ضدتکرار یکسان شناسایی و مهار شد (Unique Violation Handled). رکورد تلاش موجود بازگردانده شد.',
+                'original_attempt', jsonb_build_object(
+                    'id', v_existing_pra.id,
+                    'attempt_id', v_existing_pra.attempt_id,
+                    'status', v_existing_pra.status,
+                    'completed_at', v_existing_pra.completed_at,
+                    'response_payload', v_existing_pra.response_payload
+                )
+            );
+        ELSE
+            RAISE;
+        END IF;
+    END;
+
+    -- ۱۲. ثبت رزرو پایدار در payment_transactions
+    UPDATE payment_transactions
+    SET status = 'initiated',
+        raw_response = COALESCE(raw_response, '{}'::jsonb) || jsonb_build_object(
+            'last_attempt_id', p_attempt_id,
+            'last_attempt_status', 'initiated',
+            'last_initiated_at', NOW()
+        )
+    WHERE id = v_tx.id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'status', 'initiated_reserved',
+        'attempt_id', p_attempt_id,
+        'refund_transaction_id', v_tx.id,
+        'amount_toman', v_tx.amount_toman,
+        'other_verified_toman', v_other_verified_toman,
+        'other_initiated_toman', v_other_initiated_toman,
+        'total_committed_toman', v_total_committed_toman + v_tx.amount_toman,
+        'parent_amount_toman', v_parent_ptx.amount_toman,
+        'message', 'رزرو مالی استرداد با موفقیت در پایگاه داده کامیت شد. اکنون وب‌سرویس درگاه بانکی بدون نگه‌داشتن قفل‌های دیتابیس قابل فراخوانی است.'
+    );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION rpc_initiate_gateway_refund FROM PUBLIC, authenticated;
+GRANT EXECUTE ON FUNCTION rpc_initiate_gateway_refund TO service_role;
+
+-- ============================================================================
+-- تابع مرحله دوم: ثبت نتیجه و نهایی‌سازی تسویه استرداد پس از پاسخ درگاه (Stage 2)
+-- ============================================================================
+CREATE OR REPLACE FUNCTION rpc_finalize_gateway_refund(
+    p_refund_transaction_id UUID,
+    p_attempt_id UUID,
+    p_idempotency_key VARCHAR,
+    p_gateway_refund_ref VARCHAR,
+    p_outcome_status VARCHAR, -- 'verified', 'failed', 'uncertain'
+    p_error_message TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_tx RECORD;
+    v_parent_ptx RECORD;
+    v_payment RECORD;
+    v_order RECORD;
+    v_is_service_role BOOLEAN := (COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role');
+    v_pra RECORD;
+    v_previous_verified_toman BIGINT;
+    v_cumulative_refunded_toman BIGINT;
+    v_retry_count INT;
+    v_next_retry TIMESTAMPTZ;
+    v_retry_status VARCHAR;
+    v_target_status VARCHAR;
+    v_note TEXT;
+BEGIN
+    -- ۱. کنترل سطح دسترسی سروری
+    IF NOT v_is_service_role AND NOT auth.user_has_permission('finance:manage') THEN
+        RAISE EXCEPTION 'دسترسی غیرمجاز: نهایی‌سازی استرداد منحصراً توسط service_role یا مدیر مالی مجاز است.';
+    END IF;
+
+    -- ۲. اعتبارسنجی مقادیر وضعیت نهایی‌سازی
+    IF p_outcome_status NOT IN ('verified', 'failed', 'uncertain') THEN
+        RAISE EXCEPTION 'وضعیت نهایی‌سازی نامعتبر است. مقادیر مجاز: verified, failed, uncertain';
+    END IF;
+
+    -- ۳. قفل بدبینانه رکورد تلاش در جدول کانونیکال
+    SELECT * INTO v_pra
+    FROM payment_refund_attempts
+    WHERE attempt_id = p_attempt_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'رکورد تلاش استرداد با شناسه % یافت نشد.', p_attempt_id;
+    END IF;
+
+    IF v_pra.status = 'verified' THEN
+        RETURN jsonb_build_object(
+            'success', true,
+            'status', 'already_finalized',
+            'attempt_id', v_pra.attempt_id,
+            'attempt_status', v_pra.status,
+            'message', 'این تلاش استرداد قبلاً نهایی و تایید شده است.'
+        );
+    END IF;
+
+    -- ۴. قفل بدبینانه تراکنش استرداد
+    SELECT * INTO v_tx
+    FROM payment_transactions
+    WHERE id = p_refund_transaction_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'تراکنش استرداد یافت نشد.';
+    END IF;
+
+    IF v_tx.status = 'verified' AND v_pra.status <> 'verified' THEN
+        RAISE EXCEPTION 'خطای یکپارچگی: تراکنش استرداد (%) قبلاً توسط تلاش دیگری تایید نهایی شده است.', v_tx.id;
+    END IF;
+
+    -- ۵. قفل بدبینانه تراکنش والد، پرونده پرداخت و سفارش
+    SELECT * INTO v_parent_ptx FROM payment_transactions WHERE id = v_tx.parent_transaction_id FOR UPDATE;
+    SELECT * INTO v_payment FROM payments WHERE id = v_tx.payment_id FOR UPDATE;
+    SELECT * INTO v_order FROM orders WHERE id = v_payment.order_id FOR UPDATE;
+
+    -- ۶. پردازش بر اساس نتیجه درگاه
+    IF p_outcome_status = 'verified' THEN
+        -- الف) تایید قطعی موفقیت استرداد در درگاه بانکی
+        UPDATE payment_refund_attempts
+        SET status = 'verified',
+            response_payload = jsonb_build_object(
+                'shaparak_rrn', p_gateway_refund_ref,
+                'verified', true,
+                'verified_at', NOW()
+            ),
+            completed_at = NOW()
+        WHERE id = v_pra.id;
+
+        UPDATE payment_transactions
+        SET status = 'verified',
+            shaparak_rrn = p_gateway_refund_ref,
+            verified_at = NOW(),
+            raw_response = COALESCE(raw_response, '{}'::jsonb) || jsonb_build_object(
+                'last_attempt_id', p_attempt_id,
+                'last_attempt_status', 'verified',
+                'shaparak_rrn', p_gateway_refund_ref,
+                'verified_at', NOW(),
+                'recovered_after_failure', (v_tx.status = 'failed')
+            )
+        WHERE id = v_tx.id;
+
+        -- محاسبه مجموع استردادهای تاییدشده والد
+        SELECT COALESCE(SUM(pt.amount_toman), 0)
+        INTO v_cumulative_refunded_toman
+        FROM payment_transactions pt
+        WHERE pt.parent_transaction_id = v_parent_ptx.id
+          AND pt.transaction_type = 'refund'
+          AND pt.status = 'verified';
+
+        IF v_cumulative_refunded_toman >= v_parent_ptx.amount_toman THEN
+            v_target_status := 'refunded';
+            v_note := ' [استرداد کامل وجه در درگاه بانکی تسویه شد: ' || v_cumulative_refunded_toman::TEXT || ' تومان]';
+        ELSE
+            v_target_status := 'partially_refunded';
+            v_note := ' [استرداد جزئی وجه در درگاه بانکی تسویه شد: ' || v_cumulative_refunded_toman::TEXT || ' از ' || v_parent_ptx.amount_toman::TEXT || ' تومان تسویه شده]';
+        END IF;
+
+        UPDATE payments
+        SET status = v_target_status,
+            updated_at = NOW()
+        WHERE id = v_payment.id;
+
+        UPDATE orders
+        SET status = v_target_status,
+            admin_notes = COALESCE(admin_notes, '') || v_note,
+            updated_at = NOW()
+        WHERE id = v_order.id;
+
+        RETURN jsonb_build_object(
+            'success', true,
+            'status', v_target_status,
+            'is_partial', (v_cumulative_refunded_toman < v_parent_ptx.amount_toman),
+            'cumulative_refunded_toman', v_cumulative_refunded_toman,
+            'parent_total_toman', v_parent_ptx.amount_toman,
+            'attempt_id', p_attempt_id,
+            'shaparak_rrn', p_gateway_refund_ref
+        );
+
+    ELSIF p_outcome_status = 'failed' THEN
+        -- ب) شکست قطعی درگاه: ثبت در دفتر کل کانونیکال و آزادسازی سهمیه رزرو برای این تلاش
+        UPDATE payment_refund_attempts
+        SET status = 'failed',
+            response_payload = jsonb_build_object(
+                'error', p_error_message,
+                'verified', false,
+                'failed_at', NOW()
+            ),
+            completed_at = NOW()
+        WHERE id = v_pra.id;
+
+        SELECT COUNT(*) INTO v_retry_count
+        FROM payment_refund_attempts
+        WHERE refund_transaction_id = v_tx.id;
+
+        IF v_retry_count >= 5 THEN
+            v_next_retry := NULL;
+            v_retry_status := 'manual_finance_intervention_required';
+        ELSE
+            v_next_retry := NOW() + ((POWER(2, v_retry_count) * 2.5) * INTERVAL '1 minute');
+            v_retry_status := 'retry_scheduled';
+        END IF;
+
+        UPDATE payment_transactions
+        SET status = 'failed',
+            raw_response = COALESCE(raw_response, '{}'::jsonb) || jsonb_build_object(
+                'last_attempt_id', p_attempt_id,
+                'last_attempt_status', 'failed',
+                'refund_error', p_error_message,
+                'retry_count', v_retry_count,
+                'last_attempt_at', NOW(),
+                'next_retry_at', v_next_retry,
+                'retry_status', v_retry_status
+            )
+        WHERE id = v_tx.id;
+
+        -- بررسی تراز پیشین: اگر قبلاً بخشی از سفارش مسترد شده باشد وضعیت partially_refunded حفظ می‌شود
+        SELECT COALESCE(SUM(pt.amount_toman), 0)
+        INTO v_previous_verified_toman
+        FROM payment_transactions pt
+        WHERE pt.parent_transaction_id = v_parent_ptx.id
+          AND pt.transaction_type = 'refund'
+          AND pt.status = 'verified';
+
+        IF v_previous_verified_toman > 0 THEN
+            UPDATE payments SET status = 'partially_refunded', updated_at = NOW() WHERE id = v_payment.id;
+            UPDATE orders SET status = 'partially_refunded', updated_at = NOW() WHERE id = v_order.id;
+        ELSE
+            UPDATE payments SET status = 'refund_failed', updated_at = NOW() WHERE id = v_payment.id;
+        END IF;
+
+        RETURN jsonb_build_object(
+            'success', false,
+            'status', 'refund_failed',
+            'attempt_id', p_attempt_id,
+            'retry_count', v_retry_count,
+            'next_retry_at', v_next_retry,
+            'action', v_retry_status,
+            'error', p_error_message
+        );
+
+    ELSE -- 'uncertain' (خطای شبکه، تایم‌اوت نامشخص بانک)
+        -- ج) وضعیت نامشخص: حفظ وضعیت initiated در جدول تلاش‌ها جهت عدم آزادسازی نابجای سقف مالی تا زمان استعلام
+        UPDATE payment_refund_attempts
+        SET status = 'initiated',
+            response_payload = COALESCE(response_payload, '{}'::jsonb) || jsonb_build_object(
+                'uncertainty_flag', true,
+                'last_inquiry_error', p_error_message,
+                'reconciliation_required', true,
+                'uncertain_at', NOW()
+            )
+        WHERE id = v_pra.id;
+
+        UPDATE payment_transactions
+        SET status = 'initiated',
+            raw_response = COALESCE(raw_response, '{}'::jsonb) || jsonb_build_object(
+                'last_attempt_id', p_attempt_id,
+                'status', 'reconciliation_pending',
+                'warning', 'پاسخ نامشخص از درگاه بانکی. سهمیه رزرو برای جلوگیری از Double Refund تا استعلام قطعی حفظ شد.'
+            )
+        WHERE id = v_tx.id;
+
+        RETURN jsonb_build_object(
+            'success', false,
+            'status', 'reconciliation_required',
+            'attempt_id', p_attempt_id,
+            'message', 'پاسخ درگاه بانکی نامشخص بود؛ رزرو سهمیه جهت پیشگیری از خطای مالی حفظ شد و کار پیش‌زمینه استعلام مجدد فعال گردید.'
+        );
+    END IF;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION rpc_finalize_gateway_refund FROM PUBLIC, authenticated;
+GRANT EXECUTE ON FUNCTION rpc_finalize_gateway_refund TO service_role;
+
+-- ============================================================================
+-- تابع هماهنگ‌کننده یکپارچه استرداد وجه (Unified Transactional Coordinator)
+-- ============================================================================
 CREATE OR REPLACE FUNCTION rpc_process_gateway_refund(
     p_refund_transaction_id UUID,
     p_gateway_refund_ref VARCHAR,
@@ -776,8 +1283,8 @@ DECLARE
     v_is_service_role BOOLEAN := (COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role');
     v_existing_pra RECORD;
     v_attempt_row_id UUID;
-    v_previous_verified_toman BIGINT;
-    v_previous_initiated_toman BIGINT;
+    v_other_verified_toman BIGINT;
+    v_other_initiated_toman BIGINT;
     v_total_committed_toman BIGINT;
     v_cumulative_refunded_toman BIGINT;
     v_retry_count INT;
@@ -787,12 +1294,8 @@ DECLARE
     v_note TEXT;
 BEGIN
     -- ۱. اعتبارسنجی اجباری بودن کلید ضدتکرار (Mandatory Idempotency Key Validation)
-    IF p_idempotency_key IS NULL THEN
-        RAISE EXCEPTION 'خطای اعتبارسنجی: پارامتر کلید ضدتکرار (p_idempotency_key) اجباری است و نمی‌تواند NULL باشد.';
-    END IF;
-
-    IF TRIM(p_idempotency_key) = '' THEN
-        RAISE EXCEPTION 'خطای اعتبارسنجی: کلید ضدتکرار نمی‌تواند رشته خالی یا صرفاً شامل نویسه‌های فاصله باشد.';
+    IF p_idempotency_key IS NULL OR TRIM(p_idempotency_key) = '' THEN
+        RAISE EXCEPTION 'خطای اعتبارسنجی: پارامتر کلید ضدتکرار (p_idempotency_key) اجباری است و نمی‌تواند NULL یا خالی باشد.';
     END IF;
 
     IF p_attempt_id IS NULL THEN
@@ -804,35 +1307,7 @@ BEGIN
         RAISE EXCEPTION 'دسترسی غیرمجاز: اجرای فرآیند تسویه و ثبت استرداد منحصراً توسط سرویس سروری مورد اعتماد (service_role) یا مدیر ارشد مالی مجاز است.';
     END IF;
 
-    -- ۳. بررسی ضدتکرار در جدول کانونیکال payment_refund_attempts قبل از هرگونه تغییر مالی
-    SELECT * INTO v_existing_pra 
-    FROM payment_refund_attempts 
-    WHERE idempotency_key = p_idempotency_key;
-
-    IF FOUND THEN
-        -- اگر این کلید برای تراکنش استرداد دیگری مصرف شده باشد
-        IF v_existing_pra.refund_transaction_id <> p_refund_transaction_id THEN
-            RAISE EXCEPTION 'خطای امنیتی: کلید ضدتکرار ارسالی قبلاً برای تراکنش استرداد دیگری (%) ثبت شده است.', v_existing_pra.refund_transaction_id;
-        END IF;
-
-        -- درخواست تکراری برای همین تلاش: بازگرداندن نتیجه پیشین بدون ایجاد تلاش بانکی جدید
-        RETURN jsonb_build_object(
-            'success', (v_existing_pra.status = 'verified'),
-            'status', 'idempotent_duplicate_request',
-            'attempt_id', v_existing_pra.attempt_id,
-            'attempt_status', v_existing_pra.status,
-            'message', 'درخواست با کلید ضدتکرار تکراری دریافت شد؛ نتیجه تلاش پیشین از جدول کانونیکال تلاش‌ها بدون تکرار تراکنش بانکی بازگردانده شد.',
-            'original_attempt', jsonb_build_object(
-                'id', v_existing_pra.id,
-                'attempt_id', v_existing_pra.attempt_id,
-                'status', v_existing_pra.status,
-                'completed_at', v_existing_pra.completed_at,
-                'response_payload', v_existing_pra.response_payload
-            )
-        );
-    END IF;
-
-    -- ۴. قفل بدبینانه تراکنش استرداد جاری
+    -- ۳. قفل بدبینانه تراکنش استرداد جاری
     SELECT * INTO v_tx 
     FROM payment_transactions 
     WHERE id = p_refund_transaction_id 
@@ -842,12 +1317,44 @@ BEGIN
         RAISE EXCEPTION 'تراکنش استرداد مورد نظر یافت نشد.';
     END IF;
 
-    -- ۵. اعتبارسنجی ساختاریافته نوع تراکنش
+    -- ۴. اعتبارسنجی ساختاریافته نوع تراکنش
     IF v_tx.transaction_type IS NULL OR v_tx.transaction_type <> 'refund' THEN
-        RAISE EXCEPTION 'خطای اعتبارسنجی: تراکنش ارسالی از نوع استرداد (refund) نمی‌باشد (نوع فعلی: %). تراکنش‌های پرداخت خرید اصلی به هیچ عنوان به عنوان سند استرداد پذیرفته نمی‌شوند.', COALESCE(v_tx.transaction_type, 'NULL');
+        RAISE EXCEPTION 'خطای اعتبارسنجی: تراکنش ارسالی از نوع استرداد (refund) نمی‌باشد (نوع فعلی: %).', COALESCE(v_tx.transaction_type, 'NULL');
     END IF;
 
-    -- ۶. اعتبارسنجی و قفل بدبینانه تراکنش خرید والد (Deterministic Lock Serialization)
+    -- ۵. ممانعت قطعی از تکرار روی تراکنش استرداد تاییدشده (Issue A: Prevent Replay on Already Verified Refund)
+    IF v_tx.status = 'verified' THEN
+        SELECT * INTO v_existing_pra
+        FROM payment_refund_attempts
+        WHERE refund_transaction_id = v_tx.id AND idempotency_key = p_idempotency_key;
+
+        IF FOUND THEN
+            RETURN jsonb_build_object(
+                'success', true,
+                'status', 'idempotent_duplicate_request',
+                'refund_status', 'already_verified',
+                'attempt_id', v_existing_pra.attempt_id,
+                'attempt_status', v_existing_pra.status,
+                'message', 'تراکنش استرداد قبلاً با همین کلید ضدتکرار با موفقیت تسویه و تایید شده است (پاسخ ذخیره‌شده بازگردانده شد).',
+                'original_attempt', jsonb_build_object(
+                    'id', v_existing_pra.id,
+                    'attempt_id', v_existing_pra.attempt_id,
+                    'status', v_existing_pra.status,
+                    'completed_at', v_existing_pra.completed_at,
+                    'response_payload', v_existing_pra.response_payload
+                )
+            );
+        ELSE
+            RAISE EXCEPTION 'خطای امنیتی و مالی: تراکنش استرداد جاری (%) قبلاً با موفقیت تسویه و تایید نهایی شده است (وضعیت verified). امکان پردازش یا ثبت تلاش مجدد با کلید جدید برای تراکنش تاییدشده وجود ندارد.', v_tx.id;
+        END IF;
+    END IF;
+
+    -- ۶. اعتبارسنجی وضعیت مجاز تراکنش استرداد برای آغاز تلاش
+    IF v_tx.status NOT IN ('initiated', 'failed') THEN
+        RAISE EXCEPTION 'وضعیت نامعتبر تراکنش استرداد: تراکنش در وضعیت "%" امکان پذیرش تلاش استرداد جدید را ندارد. صرفاً وضعیت‌های initiated و failed مجاز به ثبت تلاش هستند.', v_tx.status;
+    END IF;
+
+    -- ۷. اعتبارسنجی و قفل بدبینانه تراکنش خرید والد (Deterministic Lock Serialization)
     IF v_tx.parent_transaction_id IS NULL THEN
         RAISE EXCEPTION 'خطای یکپارچگی ارجاعی: تراکنش استرداد فاقد ارجاع به تراکنش خرید والد (parent_transaction_id) است.';
     END IF;
@@ -865,8 +1372,37 @@ BEGIN
         RAISE EXCEPTION 'تراکنش والد باید یک پرداخت خرید قطعی و تاییدشده باشد (نوع: %، وضعیت: %).', v_parent_ptx.transaction_type, v_parent_ptx.status;
     END IF;
 
-    -- ۷. محاسبه سقف تجمعی استرداد از روی منبع داده کانونیکال (Cumulative Refund Limit)
-    -- تجمیع مبالغ استردادهای تاییدشده (verified) و استردادهای فعال در حال پردازش (initiated) قبلی
+    -- ۸. بررسی ضدتکرار در جدول کانونیکال تلاش‌ها پس از استقرار قفل والد (Issue C: Post-Lock Idempotency Check)
+    SELECT * INTO v_existing_pra 
+    FROM payment_refund_attempts 
+    WHERE idempotency_key = p_idempotency_key;
+
+    IF FOUND THEN
+        IF v_existing_pra.refund_transaction_id <> p_refund_transaction_id THEN
+            RAISE EXCEPTION 'خطای امنیتی: کلید ضدتکرار ارسالی قبلاً برای تراکنش استرداد دیگری (%) ثبت شده است.', v_existing_pra.refund_transaction_id;
+        END IF;
+
+        RETURN jsonb_build_object(
+            'success', (v_existing_pra.status = 'verified'),
+            'status', 'idempotent_duplicate_request',
+            'attempt_id', v_existing_pra.attempt_id,
+            'attempt_status', v_existing_pra.status,
+            'message', 'درخواست با کلید ضدتکرار تکراری دریافت شد؛ نتیجه تلاش پیشین از جدول کانونیکال تلاش‌ها بدون تکرار تراکنش بانکی بازگردانده شد.',
+            'original_attempt', jsonb_build_object(
+                'id', v_existing_pra.id,
+                'attempt_id', v_existing_pra.attempt_id,
+                'status', v_existing_pra.status,
+                'completed_at', v_existing_pra.completed_at,
+                'response_payload', v_existing_pra.response_payload
+            )
+        );
+    END IF;
+
+    -- ۹. محاسبه سقف تجمعی استرداد با تفکیک ۴ دسته (Cumulative Refund Limit - 4-Category Segregation)
+    -- دسته ۱: سایر تراکنش‌های استرداد تاییدشده والد (pt.id <> v_tx.id AND pt.status = 'verified')
+    -- دسته ۲: سایر تراکنش‌های استرداد فعال در حال پردازش والد (pt.id <> v_tx.id AND pt.status = 'initiated')
+    -- دسته ۳: مبلغ همین تراکنش استرداد جاری (v_tx.amount_toman)
+    -- دسته ۴: تلاش‌های قبلی ناموفق همین تراکنش (failed) که تعهد مالی اضافی ایجاد نمی‌کنند
     SELECT 
         COALESCE(SUM(CASE 
             WHEN pt.status = 'verified' OR EXISTS (
@@ -885,21 +1421,21 @@ BEGIN
             ) THEN pt.amount_toman 
             ELSE 0 
         END), 0)
-    INTO v_previous_verified_toman, v_previous_initiated_toman
+    INTO v_other_verified_toman, v_other_initiated_toman
     FROM payment_transactions pt
     WHERE pt.parent_transaction_id = v_parent_ptx.id
       AND pt.transaction_type = 'refund'
       AND pt.id <> v_tx.id;
 
-    v_total_committed_toman := v_previous_verified_toman + v_previous_initiated_toman;
+    v_total_committed_toman := v_other_verified_toman + v_other_initiated_toman;
 
-    -- بررسی اینکه مجموع تعهدات قبلی به اضافه مبلغ استرداد فعلی از کل مبلغ پرداخت اصلی بیشتر نشود
+    -- بررسی اینکه مجموع تعهدات قبلی به اضافه مبلغ استرداد فعلی از کل مبلغ پرداخت اصلی فراتر نرود
     IF (v_total_committed_toman + v_tx.amount_toman) > v_parent_ptx.amount_toman THEN
         RAISE EXCEPTION 'تخطی از سقف استرداد: مجموع استردادهای تاییدشده (%) و در حال تعهد (%) به علاوه مبلغ استرداد جاری (%) از کل مبلغ پرداخت اصلی (%) فراتر می‌رود.',
-            v_previous_verified_toman, v_previous_initiated_toman, v_tx.amount_toman, v_parent_ptx.amount_toman;
+            v_other_verified_toman, v_other_initiated_toman, v_tx.amount_toman, v_parent_ptx.amount_toman;
     END IF;
 
-    -- ۸. اعتبارسنجی پرونده پرداخت و سفارش
+    -- ۱۰. اعتبارسنجی پرونده پرداخت و سفارش
     SELECT * INTO v_payment FROM payments WHERE id = v_tx.payment_id FOR UPDATE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'پرونده پرداخت متناظر با این استرداد یافت نشد.';
@@ -910,30 +1446,55 @@ BEGIN
         RAISE EXCEPTION 'سفارش متناظر با این پرونده استرداد یافت نشد.';
     END IF;
 
-    -- ۹. ثبت تلاش جدید در جدول کانونیکال payment_refund_attempts با وضعیت اولیه initiated
-    INSERT INTO payment_refund_attempts (
-        refund_transaction_id,
-        attempt_id,
-        idempotency_key,
-        status,
-        request_payload,
-        created_at
-    ) VALUES (
-        v_tx.id,
-        p_attempt_id,
-        p_idempotency_key,
-        'initiated',
-        jsonb_build_object(
-            'amount_toman', v_tx.amount_toman,
-            'gateway', v_tx.gateway,
-            'parent_transaction_id', v_parent_ptx.id,
-            'payment_id', v_payment.id,
-            'order_id', v_order.id
-        ),
-        NOW()
-    ) RETURNING id INTO v_attempt_row_id;
+    -- ۱۱. ثبت اتمیک تلاش جدید با مدیریت استثنای برخورد همزمان کلید ضدتکرار (Issue C: unique_violation Trap)
+    BEGIN
+        INSERT INTO payment_refund_attempts (
+            refund_transaction_id,
+            attempt_id,
+            idempotency_key,
+            status,
+            request_payload,
+            created_at
+        ) VALUES (
+            v_tx.id,
+            p_attempt_id,
+            p_idempotency_key,
+            'initiated',
+            jsonb_build_object(
+                'amount_toman', v_tx.amount_toman,
+                'gateway', v_tx.gateway,
+                'parent_transaction_id', v_parent_ptx.id,
+                'payment_id', v_payment.id,
+                'order_id', v_order.id
+            ),
+            NOW()
+        ) RETURNING id INTO v_attempt_row_id;
+    EXCEPTION WHEN unique_violation THEN
+        SELECT * INTO v_existing_pra
+        FROM payment_refund_attempts
+        WHERE idempotency_key = p_idempotency_key;
 
-    -- ۱۰. پردازش قطعی نتیجه پاسخ بانک (تایید یا شکست)
+        IF FOUND THEN
+            RETURN jsonb_build_object(
+                'success', (v_existing_pra.status = 'verified'),
+                'status', 'idempotent_duplicate_request',
+                'attempt_id', v_existing_pra.attempt_id,
+                'attempt_status', v_existing_pra.status,
+                'message', 'درخواست همزمان با کلید ضدتکرار یکسان شناسایی و مهار شد (Unique Violation Handled). نتیجه تلاش موجود بازگردانده شد.',
+                'original_attempt', jsonb_build_object(
+                    'id', v_existing_pra.id,
+                    'attempt_id', v_existing_pra.attempt_id,
+                    'status', v_existing_pra.status,
+                    'completed_at', v_existing_pra.completed_at,
+                    'response_payload', v_existing_pra.response_payload
+                )
+            );
+        ELSE
+            RAISE;
+        END IF;
+    END;
+
+    -- ۱۲. پردازش قطعی نتیجه پاسخ بانک (تایید یا شکست)
     IF p_verified_success THEN
         -- الف) به‌روزرسانی جدول تلاش‌های استرداد به verified
         UPDATE payment_refund_attempts
@@ -961,7 +1522,7 @@ BEGIN
         WHERE id = v_tx.id;
 
         -- ج) محاسبه تراز تجمیعی و تفکیک استرداد جزئی (partially_refunded) از استرداد کامل (refunded)
-        v_cumulative_refunded_toman := v_previous_verified_toman + v_tx.amount_toman;
+        v_cumulative_refunded_toman := v_other_verified_toman + v_tx.amount_toman;
 
         IF v_cumulative_refunded_toman >= v_parent_ptx.amount_toman THEN
             v_target_status := 'refunded';
@@ -995,7 +1556,7 @@ BEGIN
             'shaparak_rrn', p_gateway_refund_ref
         );
     ELSE
-        -- عدم موفقیت تلاش درگاه: به‌روزرسانی جدول تلاش‌ها به failed
+        -- عدم موفقیت تلاش درگاه: به‌روزرسانی جدول تلاش‌ها به failed و آزادسازی سهمیه
         UPDATE payment_refund_attempts
         SET status = 'failed',
             response_payload = jsonb_build_object(
@@ -1033,7 +1594,7 @@ BEGIN
         WHERE id = v_tx.id;
 
         -- اگر قبلاً بخشی از سفارش مسترد شده باشد وضعیت partially_refunded حفظ می‌شود
-        IF v_previous_verified_toman > 0 THEN
+        IF v_other_verified_toman > 0 THEN
             UPDATE payments SET status = 'partially_refunded', updated_at = NOW() WHERE id = v_payment.id;
             UPDATE orders SET status = 'partially_refunded', updated_at = NOW() WHERE id = v_order.id;
         ELSE

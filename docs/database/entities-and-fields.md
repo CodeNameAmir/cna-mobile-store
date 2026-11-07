@@ -575,7 +575,7 @@
 | `shaparak_rrn` | `VARCHAR(50)` | NULL | — | شماره ارجاع شاپرک (Retrieval Reference Number) |
 | `trace_number` | `VARCHAR(50)` | NULL | — | شماره پیگیری تراکنش در بانک صادرکننده |
 | `masked_pan` | `VARCHAR(20)` | NULL | — | شماره کارت ماسک‌شده مشتری |
-| `raw_response` | `JSONB` | NULL | — | رونوشت کامل پاسخ وب‌سرویس بانک، آرایه تلاش‌ها (`refund_attempts`) و لاگ خطاها |
+| `raw_response` | `JSONB` | NULL | — | رونوشت ساختاریافته تله‌متری، متادیتا و پاسخ وب‌سرویس درگاه بانک (دفتر کل کانونیکال تلاش‌های استرداد وجه منحصراً در جدول مجزای `payment_refund_attempts` ثبت و مدیریت می‌شود) |
 | `created_at` | `TIMESTAMPTZ` | NOT NULL | `NOW()` | زمان هدایت کاربر به صفحه بانک یا ثبت درخواست استرداد |
 | `verified_at` | `TIMESTAMPTZ` | NULL | — | زمان استعلام و تایید نهایی تراکنش |
 
