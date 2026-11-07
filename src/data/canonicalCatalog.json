@@ -1,0 +1,845 @@
+{
+  "version": "1.0.0",
+  "warehouse": {
+    "code": "WH-CENTRAL",
+    "nameFa": "انبار مرکزی تهران",
+    "address": "تهران، کیلومتر ۱۴ جاده مخصوص کرج، شهرک لجستیک سپهر، بلوک C",
+    "postalCode": "1389745123",
+    "phone": "02144556677",
+    "managerName": "مهندس سید علیرضا شمس",
+    "isCentral": true,
+    "isActive": true
+  },
+  "brands": [
+    { "slug": "apple", "nameEn": "Apple", "nameFa": "اپل", "isFeatured": true },
+    { "slug": "samsung", "nameEn": "Samsung", "nameFa": "سامسونگ", "isFeatured": true },
+    { "slug": "xiaomi", "nameEn": "Xiaomi", "nameFa": "شیائومی", "isFeatured": true },
+    { "slug": "google", "nameEn": "Google", "nameFa": "گوگل", "isFeatured": true },
+    { "slug": "anker", "nameEn": "Anker", "nameFa": "انکر", "isFeatured": false },
+    { "slug": "nillkin", "nameEn": "Nillkin", "nameFa": "نیلکین", "isFeatured": false }
+  ],
+  "categories": [
+    { "slug": "phones", "titleFa": "گوشی موبایل", "titleEn": "Smartphones", "iconName": "Smartphone", "sortOrder": 1 },
+    { "slug": "smartwatches", "titleFa": "ساعت هوشمند", "titleEn": "Smartwatches", "iconName": "Watch", "sortOrder": 2 },
+    { "slug": "audio", "titleFa": "هدفون و ایرپاد", "titleEn": "Audio & Headphones", "iconName": "Headphones", "sortOrder": 3 },
+    { "slug": "chargers", "titleFa": "شارژر و پاوربانک", "titleEn": "Chargers & Power Banks", "iconName": "BatteryCharging", "sortOrder": 4 },
+    { "slug": "cases-screen", "titleFa": "قاب و لوازم جانبی", "titleEn": "Cases & Screen Protectors", "iconName": "Shield", "sortOrder": 5 }
+  ],
+  "warranties": [
+    { "providerName": "گارانتی ۱۸ ماهه جامع CNA Care + فعال‌سازی همتا", "durationMonths": 18, "coverageFa": "ضمانت ۱۸ ماهه شرکتی کلیه قطعات سخت‌افزاری و رجیستری رسمی در سامانه همتا" },
+    { "providerName": "گارانتی ۱۲ ماهه تعویض CNA Care Accessories", "durationMonths": 12, "coverageFa": "ضمانت تعویض فوری ۱۲ ماهه در صورت بروز هرگونه عیب فنی کارخانه‌ای" }
+  ],
+  "products": [
+    {
+      "id": "prod-iphone-16-pro-max",
+      "slug": "iphone-16-pro-max",
+      "brandSlug": "apple",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل اپل مدل iPhone 16 Pro Max دو سیم‌کارت",
+      "titleEn": "Apple iPhone 16 Pro Max Dual SIM 5G - Titanium Edition",
+      "modelName": "iPhone 16 Pro Max",
+      "badge": "پرچمدار ۲۰۲۴",
+      "ratingAverage": 4.9,
+      "reviewsCount": 142,
+      "isPublished": true,
+      "isFeatured": true,
+      "warrantyIndex": 0,
+      "descriptionFa": "آیفون ۱۶ پرو مکس با پردازنده قدرتمند A18 Pro، فریم تیتانیوم درجه ۵، دکمه جدید کنترل دوربین و دوربین ۴۸ مگاپیکسلی با زوم اپتیکال ۵ برابری.",
+      "specs": {
+        "screen": "۶.۹ اینچ Super Retina XDR OLED",
+        "processor": "Apple A18 Pro (3nm)",
+        "mainCamera": "۴۸ مگاپیکسل فیوژن + ۴۸ مگاپیکسل اولتراواید + ۱۲ مگاپیکسل تله‌فوتو ۵X",
+        "battery": "۴۶۸۵ میلی‌آمپرساعت با شارژ سریع MagSafe",
+        "weight": "۲۲۷ گرم",
+        "os": "iOS 18",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuCIFVT994X_YGWzgqB6D5mcpNaVlf0pDu5NHXuFmURSzQJYjC16UDsjk4VND1sLXUeMY-7mAGZyJFPYbrHEP5LffWiimWZGC4fMA81fF8nJOc-ilKR1CFR1KTaPPjPT4NKI7BiJGp7Xf65e9ymrhKNzvWZSAPsrGLYHgVvYVUmx4TA2wAKzwh3zrTd53ow9-ju616B9pknJy49l2kSnIhWALJOYU5YscPysDQ5fDhP_o6r8WZxc2ljKqA",
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuDYpszsyvAqBJ7cTtRXQoeeP8mJptNSgpHPgS5PwO_tsDv0MstzES6y3Y37vyxkv3tfDeJrz1R48HtCynLKMm4rih1DlMwjWG8DHDlOAJqYwsSCsypnPP-WYgzO46pLOuBumLi1LTvJE3l71CCjphKl65PcwnK9Xky27j_uuf3LD-y_UYjarkXJ9K_gXFDLAc7XlmEtcx1KguHh0H64OEXBG3qxhVCYwTHgZDpuw7tCeBLcQBKPv4mkhQ"
+      ],
+      "variants": [
+        { "sku": "CNA-APL-16PM-256-DES", "colorNameFa": "تیتانیوم صحرایی", "colorNameEn": "Desert Titanium", "colorHex": "#C5B4A0", "storage": "256GB", "ram": "8GB", "priceToman": 94200000, "originalPriceToman": 98000000, "shelfLocation": "B-14", "initialStock": 6 },
+        { "sku": "CNA-APL-16PM-256-BLK", "colorNameFa": "تیتانیوم مشکی", "colorNameEn": "Black Titanium", "colorHex": "#2A2B2D", "storage": "256GB", "ram": "8GB", "priceToman": 93800000, "originalPriceToman": 97500000, "shelfLocation": "B-14", "initialStock": 5 },
+        { "sku": "CNA-APL-16PM-512-DES", "colorNameFa": "تیتانیوم صحرایی", "colorNameEn": "Desert Titanium", "colorHex": "#C5B4A0", "storage": "512GB", "ram": "8GB", "priceToman": 108500000, "originalPriceToman": 112000000, "shelfLocation": "B-14", "initialStock": 3 }
+      ]
+    },
+    {
+      "id": "prod-iphone-16-pro",
+      "slug": "iphone-16-pro",
+      "brandSlug": "apple",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل اپل مدل iPhone 16 Pro دو سیم‌کارت",
+      "titleEn": "Apple iPhone 16 Pro Dual SIM 5G - Titanium Edition",
+      "modelName": "iPhone 16 Pro",
+      "badge": "پیشنهاد ویژه",
+      "ratingAverage": 4.8,
+      "reviewsCount": 89,
+      "isPublished": true,
+      "isFeatured": true,
+      "warrantyIndex": 0,
+      "descriptionFa": "آیفون ۱۶ پرو با ابعاد متناسب ۶.۳ اینچی، فریم تیتانیومی سبک، تراشه A18 Pro و سیستم دوربین پیشرفته سه گانه.",
+      "specs": {
+        "screen": "۶.۳ اینچ Super Retina XDR OLED",
+        "processor": "Apple A18 Pro (3nm)",
+        "mainCamera": "۴۸ مگاپیکسل + ۴۸ مگاپیکسل + ۱۲ مگاپیکسل ۵X",
+        "battery": "۳۵۸۲ میلی‌آمپرساعت",
+        "weight": "۱۹۹ گرم",
+        "os": "iOS 18",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuDYpszsyvAqBJ7cTtRXQoeeP8mJptNSgpHPgS5PwO_tsDv0MstzES6y3Y37vyxkv3tfDeJrz1R48HtCynLKMm4rih1DlMwjWG8DHDlOAJqYwsSCsypnPP-WYgzO46pLOuBumLi1LTvJE3l71CCjphKl65PcwnK9Xky27j_uuf3LD-y_UYjarkXJ9K_gXFDLAc7XlmEtcx1KguHh0H64OEXBG3qxhVCYwTHgZDpuw7tCeBLcQBKPv4mkhQ"
+      ],
+      "variants": [
+        { "sku": "CNA-APL-16P-256-NAT", "colorNameFa": "تیتانیوم طبیعی", "colorNameEn": "Natural Titanium", "colorHex": "#8E8B82", "storage": "256GB", "ram": "8GB", "priceToman": 83500000, "originalPriceToman": 86000000, "shelfLocation": "B-14", "initialStock": 5 },
+        { "sku": "CNA-APL-16P-256-WHT", "colorNameFa": "تیتانیوم سفید", "colorNameEn": "White Titanium", "colorHex": "#E3E4E5", "storage": "256GB", "ram": "8GB", "priceToman": 83900000, "originalPriceToman": 86500000, "shelfLocation": "B-14", "initialStock": 4 }
+      ]
+    },
+    {
+      "id": "prod-iphone-16-plus",
+      "slug": "iphone-16-plus",
+      "brandSlug": "apple",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل اپل مدل iPhone 16 Plus دو سیم‌کارت",
+      "titleEn": "Apple iPhone 16 Plus Dual SIM 5G",
+      "modelName": "iPhone 16 Plus",
+      "badge": "شارژدهی فوق‌العاده",
+      "ratingAverage": 4.7,
+      "reviewsCount": 45,
+      "isPublished": true,
+      "isFeatured": false,
+      "warrantyIndex": 0,
+      "descriptionFa": "آیفون ۱۶ پلاس با نمایشگر بزرگ ۶.۷ اینچی و بالاترین میزان نگهداری شارژ باتری در بین گوشی‌های آیفون.",
+      "specs": {
+        "screen": "۶.۷ اینچ Super Retina XDR OLED",
+        "processor": "Apple A18 (3nm)",
+        "mainCamera": "۴۸ مگاپیکسل فیوژن + ۱۲ مگاپیکسل اولتراواید",
+        "battery": "۴۶۷۴ میلی‌آمپرساعت",
+        "weight": "۱۹۹ گرم",
+        "os": "iOS 18",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuCnhMSBj-r1d_rG__Jqa8cjnApWRYRTihPMGHKWdNdZbXvyaJctP1Khen0nqBIUk3D8vkkpjEtlqQ8r1BUUjUCjJrwmV0md9GU-XjK0Qz-P0X76jAOFMg0WDTTWr16z6a5qHuWD99Hapr3S9q39z7R-WbaXNWw5rQAVxdLB8lTMS3f13NH8ZRRzJdLiDzCL8VxAvJ8jHyoRZtM_qX-DRHPLYDJbBUFodOS2vNGj_K1FqzWZaZmx9xpWyA"
+      ],
+      "variants": [
+        { "sku": "CNA-APL-16PL-128-BLU", "colorNameFa": "آبی اقیانوسی", "colorNameEn": "Ultramarine", "colorHex": "#3B5998", "storage": "128GB", "ram": "8GB", "priceToman": 67500000, "originalPriceToman": 69900000, "shelfLocation": "B-15", "initialStock": 7 },
+        { "sku": "CNA-APL-16PL-256-PNK", "colorNameFa": "صورتی ملایم", "colorNameEn": "Pink", "colorHex": "#FAD0C4", "storage": "256GB", "ram": "8GB", "priceToman": 74500000, "originalPriceToman": 77000000, "shelfLocation": "B-15", "initialStock": 4 }
+      ]
+    },
+    {
+      "id": "prod-iphone-16",
+      "slug": "iphone-16",
+      "brandSlug": "apple",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل اپل مدل iPhone 16 دو سیم‌کارت",
+      "titleEn": "Apple iPhone 16 Dual SIM 5G",
+      "modelName": "iPhone 16",
+      "badge": "نسل جدید",
+      "ratingAverage": 4.8,
+      "reviewsCount": 67,
+      "isPublished": true,
+      "isFeatured": true,
+      "warrantyIndex": 0,
+      "descriptionFa": "آیفون ۱۶ با پردازنده A18، دکمه اکشن، کنترل دوربین لمسی و عکاسی ماکرو قدرتمند در رنگ‌های بسیار شاداب.",
+      "specs": {
+        "screen": "۶.۱ اینچ Super Retina XDR OLED",
+        "processor": "Apple A18 (3nm)",
+        "mainCamera": "۴۸ مگاپیکسل + ۱۲ مگاپیکسل",
+        "battery": "۳۵۶۱ میلی‌آمپرساعت",
+        "weight": "۱۷۰ گرم",
+        "os": "iOS 18",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuC5kSzm6rGNtqf2TLpCwNu3ngxb9coi9iSj3QP6EdRafiq_uV5dseNVJhtt8ZVDc7hEuEaCmB6Pt5L41IdCFFu6KkDOGXlYJU6805lV8aANbzQeCYURmSztbBDZO5-x8pM9chD8nL8sf6CbwMIZ5SfKfPA2Yz4fZ40W19NEzC9TPHLHBjCFU7T-8-N4mBNYlgSbPEWXP1s-aU1qd9awBg_91nBy3Z3x6f9u9S7eBPPXK4LaGosIaDvPHw"
+      ],
+      "variants": [
+        { "sku": "CNA-APL-16-128-BLK", "colorNameFa": "مشکی عمیق", "colorNameEn": "Black", "colorHex": "#1F2022", "storage": "128GB", "ram": "8GB", "priceToman": 58500000, "originalPriceToman": 61000000, "shelfLocation": "B-15", "initialStock": 9 },
+        { "sku": "CNA-APL-16-128-WHT", "colorNameFa": "سفید کریستالی", "colorNameEn": "White", "colorHex": "#F5F5F7", "storage": "128GB", "ram": "8GB", "priceToman": 58800000, "originalPriceToman": 61200000, "shelfLocation": "B-15", "initialStock": 8 }
+      ]
+    },
+    {
+      "id": "prod-iphone-15",
+      "slug": "iphone-15",
+      "brandSlug": "apple",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل اپل مدل iPhone 15 دو سیم‌کارت",
+      "titleEn": "Apple iPhone 15 Dual SIM 5G",
+      "modelName": "iPhone 15",
+      "badge": "پرفروش‌ترین",
+      "ratingAverage": 4.7,
+      "reviewsCount": 115,
+      "isPublished": true,
+      "isFeatured": false,
+      "warrantyIndex": 0,
+      "descriptionFa": "آیفون ۱۵ با درگاه مدرن USB-C، داینامیک آیلند هوشمند و دوربین ۴۸ مگاپیکسلی با تفکیک رنگ فوق‌العاده.",
+      "specs": {
+        "screen": "۶.۱ اینچ Super Retina XDR OLED",
+        "processor": "Apple A16 Bionic (4nm)",
+        "mainCamera": "۴۸ مگاپیکسل + ۱۲ مگاپیکسل",
+        "battery": "۳۳۴۹ میلی‌آمپرساعت",
+        "weight": "۱۷۱ گرم",
+        "os": "iOS 17 (قابل ارتقا)",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuCnhMSBj-r1d_rG__Jqa8cjnApWRYRTihPMGHKWdNdZbXvyaJctP1Khen0nqBIUk3D8vkkpjEtlqQ8r1BUUjUCjJrwmV0md9GU-XjK0Qz-P0X76jAOFMg0WDTTWr16z6a5qHuWD99Hapr3S9q39z7R-WbaXNWw5rQAVxdLB8lTMS3f13NH8ZRRzJdLiDzCL8VxAvJ8jHyoRZtM_qX-DRHPLYDJbBUFodOS2vNGj_K1FqzWZaZmx9xpWyA"
+      ],
+      "variants": [
+        { "sku": "CNA-APL-15-128-BLU", "colorNameFa": "آبی روشن", "colorNameEn": "Blue", "colorHex": "#D4E3EA", "storage": "128GB", "ram": "6GB", "priceToman": 51200000, "originalPriceToman": 53500000, "shelfLocation": "B-16", "initialStock": 6 },
+        { "sku": "CNA-APL-15-128-BLK", "colorNameFa": "مشکی", "colorNameEn": "Black", "colorHex": "#2D2E30", "storage": "128GB", "ram": "6GB", "priceToman": 50900000, "originalPriceToman": 53000000, "shelfLocation": "B-16", "initialStock": 4 }
+      ]
+    },
+    {
+      "id": "prod-galaxy-s24-ultra",
+      "slug": "galaxy-s24-ultra",
+      "brandSlug": "samsung",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل سامسونگ مدل Galaxy S24 Ultra 5G",
+      "titleEn": "Samsung Galaxy S24 Ultra 5G Titanium",
+      "modelName": "Galaxy S24 Ultra",
+      "badge": "هوش مصنوعی Galaxy AI",
+      "ratingAverage": 4.9,
+      "reviewsCount": 164,
+      "isPublished": true,
+      "isFeatured": true,
+      "warrantyIndex": 0,
+      "descriptionFa": "پرچمدار سامسونگ مجهز به قلم S-Pen داخلی، شیشه ضدانعکاس Gorilla Armor، زوم ۱۰۰ برابری و ابزارهای هوش مصنوعی ترجمه و ویرایش عکس.",
+      "specs": {
+        "screen": "۶.۸ اینچ Dynamic LTPO AMOLED 2X 120Hz",
+        "processor": "Snapdragon 8 Gen 3 for Galaxy (4nm)",
+        "mainCamera": "۲۰۰ مگاپیکسل + ۵۰ مگاپیکسل + ۱۰ مگاپیکسل + ۱۲ مگاپیکسل",
+        "battery": "۵۰۰۰ میلی‌آمپرساعت با شارژ سریع ۴۵ وات",
+        "weight": "۲۳۲ گرم",
+        "os": "Android 14 با ۷ سال آپدیت تضمینی",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8"
+      ],
+      "variants": [
+        { "sku": "CNA-SAM-S24U-256-GRY", "colorNameFa": "خاکستری تیتانیوم", "colorNameEn": "Titanium Gray", "colorHex": "#68696E", "storage": "256GB", "ram": "12GB", "priceToman": 72500000, "originalPriceToman": 75000000, "shelfLocation": "B-08", "initialStock": 7 },
+        { "sku": "CNA-SAM-S24U-256-VIO", "colorNameFa": "بنفش تیتانیوم", "colorNameEn": "Titanium Violet", "colorHex": "#4E4B5C", "storage": "256GB", "ram": "12GB", "priceToman": 72200000, "originalPriceToman": 74800000, "shelfLocation": "B-08", "initialStock": 5 },
+        { "sku": "CNA-SAM-S24U-512-BLK", "colorNameFa": "مشکی تیتانیوم", "colorNameEn": "Titanium Black", "colorHex": "#2B2B2C", "storage": "512GB", "ram": "12GB", "priceToman": 81500000, "originalPriceToman": 84500000, "shelfLocation": "B-08", "initialStock": 3 }
+      ]
+    },
+    {
+      "id": "prod-galaxy-s24-plus",
+      "slug": "galaxy-s24-plus",
+      "brandSlug": "samsung",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل سامسونگ مدل Galaxy S24 Plus 5G",
+      "titleEn": "Samsung Galaxy S24+ 5G",
+      "modelName": "Galaxy S24+",
+      "badge": "تعادل بی‌نظیر قدرت",
+      "ratingAverage": 4.8,
+      "reviewsCount": 58,
+      "isPublished": true,
+      "isFeatured": false,
+      "warrantyIndex": 0,
+      "descriptionFa": "گلکسی اس ۲۴ پلاس با رزولوشن نمایشگر Quad HD+، باتری حجیم ۴۹۰۰ میلی‌آمپری و ۱۲ گیگابایت رم برای اجرای روان‌ترین بازی‌ها.",
+      "specs": {
+        "screen": "۶.۷ اینچ Dynamic AMOLED 2X QHD+ 120Hz",
+        "processor": "Exynos 2400 (4nm)",
+        "mainCamera": "۵۰ مگاپیکسل + ۱۰ مگاپیکسل + ۱۲ مگاپیکسل",
+        "battery": "۴۹۰۰ میلی‌آمپرساعت",
+        "weight": "۱۹۶ گرم",
+        "os": "Android 14",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8"
+      ],
+      "variants": [
+        { "sku": "CNA-SAM-S24P-256-BLK", "colorNameFa": "مشکی اونیکس", "colorNameEn": "Onyx Black", "colorHex": "#222222", "storage": "256GB", "ram": "12GB", "priceToman": 55800000, "originalPriceToman": 58000000, "shelfLocation": "B-09", "initialStock": 5 },
+        { "sku": "CNA-SAM-S24P-256-GRY", "colorNameFa": "خاکستری مرمرین", "colorNameEn": "Marble Gray", "colorHex": "#B8B9B7", "storage": "256GB", "ram": "12GB", "priceToman": 55500000, "originalPriceToman": 57900000, "shelfLocation": "B-09", "initialStock": 4 }
+      ]
+    },
+    {
+      "id": "prod-galaxy-s24",
+      "slug": "galaxy-s24",
+      "brandSlug": "samsung",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل سامسونگ مدل Galaxy S24 5G",
+      "titleEn": "Samsung Galaxy S24 5G",
+      "modelName": "Galaxy S24",
+      "badge": "خوش‌دست و کامپکت",
+      "ratingAverage": 4.7,
+      "reviewsCount": 82,
+      "isPublished": true,
+      "isFeatured": true,
+      "warrantyIndex": 0,
+      "descriptionFa": "گلکسی اس ۲۴ پرچمداری جمع‌وجور با حاشیه‌های بسیار باریک، وزن سبک ۱۶۷ گرمی و پردازش هوش مصنوعی در دستان شما.",
+      "specs": {
+        "screen": "۶.۲ اینچ Dynamic AMOLED 2X FHD+ 120Hz",
+        "processor": "Exynos 2400 (4nm)",
+        "mainCamera": "۵۰ مگاپیکسل + ۱۰ مگاپیکسل + ۱۲ مگاپیکسل",
+        "battery": "۴۰۰۰ میلی‌آمپرساعت",
+        "weight": "۱۶۷ گرم",
+        "os": "Android 14",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8"
+      ],
+      "variants": [
+        { "sku": "CNA-SAM-S24-128-VIO", "colorNameFa": "بنفش کبالت", "colorNameEn": "Cobalt Violet", "colorHex": "#433D52", "storage": "128GB", "ram": "8GB", "priceToman": 44500000, "originalPriceToman": 46500000, "shelfLocation": "B-09", "initialStock": 7 },
+        { "sku": "CNA-SAM-S24-256-YEL", "colorNameFa": "زرد کهربایی", "colorNameEn": "Amber Yellow", "colorHex": "#F0E4B7", "storage": "256GB", "ram": "8GB", "priceToman": 48200000, "originalPriceToman": 50500000, "shelfLocation": "B-09", "initialStock": 5 }
+      ]
+    },
+    {
+      "id": "prod-galaxy-s23-fe",
+      "slug": "galaxy-s23-fe",
+      "brandSlug": "samsung",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل سامسونگ مدل Galaxy S23 FE 5G",
+      "titleEn": "Samsung Galaxy S23 FE 5G",
+      "modelName": "Galaxy S23 FE",
+      "badge": "ارزش خرید بالا",
+      "ratingAverage": 4.6,
+      "reviewsCount": 139,
+      "isPublished": true,
+      "isFeatured": false,
+      "warrantyIndex": 0,
+      "descriptionFa": "نسخه طرفداران سامسونگ با تجربه پرچمدار در قالب قیمتی اقتصادی، مجهز به دوربین ۵۰ مگاپیکسلی و بدنه شیشه‌ای آلومینیومی.",
+      "specs": {
+        "screen": "۶.۴ اینچ Dynamic AMOLED 2X 120Hz",
+        "processor": "Exynos 2200 (4nm)",
+        "mainCamera": "۵۰ مگاپیکسل + ۸ مگاپیکسل + ۱۲ مگاپیکسل",
+        "battery": "۴۵۰۰ میلی‌آمپرساعت",
+        "weight": "۲۰۹ گرم",
+        "os": "Android 13 (ارتقا به 14)",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8"
+      ],
+      "variants": [
+        { "sku": "CNA-SAM-S23FE-256-GRP", "colorNameFa": "گرافیتی", "colorNameEn": "Graphite", "colorHex": "#363839", "storage": "256GB", "ram": "8GB", "priceToman": 28400000, "originalPriceToman": 30000000, "shelfLocation": "B-10", "initialStock": 8 },
+        { "sku": "CNA-SAM-S23FE-256-MNT", "colorNameFa": "نعنایی", "colorNameEn": "Mint", "colorHex": "#C8E2D4", "storage": "256GB", "ram": "8GB", "priceToman": 28600000, "originalPriceToman": 30200000, "shelfLocation": "B-10", "initialStock": 6 }
+      ]
+    },
+    {
+      "id": "prod-galaxy-a55",
+      "slug": "galaxy-a55",
+      "brandSlug": "samsung",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل سامسونگ مدل Galaxy A55 5G",
+      "titleEn": "Samsung Galaxy A55 5G",
+      "modelName": "Galaxy A55",
+      "badge": "پرفروش‌ترین میان‌رده",
+      "ratingAverage": 4.8,
+      "reviewsCount": 210,
+      "isPublished": true,
+      "isFeatured": true,
+      "warrantyIndex": 0,
+      "descriptionFa": "میان‌رده پریمیوم سامسونگ با فریم فلزی صیقلی، محافظت گوریلا گلس ویکتوس پلاس و پردازنده گرافیکی قدرتمند بر پایه معماری AMD.",
+      "specs": {
+        "screen": "۶.۶ اینچ Super AMOLED 120Hz HDR10+",
+        "processor": "Exynos 1480 (4nm)",
+        "mainCamera": "۵۰ مگاپیکسل OIS + ۱۲ مگاپیکسل + ۵ مگاپیکسل",
+        "battery": "۵۰۰۰ میلی‌آمپرساعت",
+        "weight": "۲۱۳ گرم",
+        "os": "Android 14",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8"
+      ],
+      "variants": [
+        { "sku": "CNA-SAM-A55-256-NAV", "colorNameFa": "سرمه‌ای جذاب", "colorNameEn": "Awesome Navy", "colorHex": "#232A36", "storage": "256GB", "ram": "8GB", "priceToman": 21800000, "originalPriceToman": 23200000, "shelfLocation": "B-11", "initialStock": 12 },
+        { "sku": "CNA-SAM-A55-256-BLU", "colorNameFa": "آبی یخی", "colorNameEn": "Awesome Iceblue", "colorHex": "#D4E6F1", "storage": "256GB", "ram": "8GB", "priceToman": 21900000, "originalPriceToman": 23300000, "shelfLocation": "B-11", "initialStock": 10 }
+      ]
+    },
+    {
+      "id": "prod-xiaomi-14-ultra",
+      "slug": "xiaomi-14-ultra",
+      "brandSlug": "xiaomi",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل شیائومی مدل Xiaomi 14 Ultra 5G",
+      "titleEn": "Xiaomi 14 Ultra 5G Leica Quad-Camera",
+      "modelName": "Xiaomi 14 Ultra",
+      "badge": "غول عکاسی لایکا",
+      "ratingAverage": 4.9,
+      "reviewsCount": 78,
+      "isPublished": true,
+      "isFeatured": true,
+      "warrantyIndex": 0,
+      "descriptionFa": "شاهکار مشترک لایکا و شیائومی با سنسور یک اینچی LYT-900، دیافراگم متغیر بدون پله و بدنه چرم نانو با استحکام بدنه استثنایی.",
+      "specs": {
+        "screen": "۶.۷۳ اینچ LTPO AMOLED WQHD+ 120Hz 3000 nits",
+        "processor": "Snapdragon 8 Gen 3 (4nm)",
+        "mainCamera": "چهارگانه ۵۰ مگاپیکسل با لنزهای Summilux لایکا",
+        "battery": "۵۰۰۰ میلی‌آمپرساعت با شارژ ۹۰ وات و وایرلس ۸۰ وات",
+        "weight": "۲۱۹.۸ گرم",
+        "os": "HyperOS بر پایه Android 14",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuB3V1C5m8K0l7P2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2"
+      ],
+      "variants": [
+        { "sku": "CNA-XMI-14U-512-BLK", "colorNameFa": "مشکی چرم نانو", "colorNameEn": "Black", "colorHex": "#212121", "storage": "512GB", "ram": "16GB", "priceToman": 74900000, "originalPriceToman": 78000000, "shelfLocation": "C-02", "initialStock": 3 },
+        { "sku": "CNA-XMI-14U-512-WHT", "colorNameFa": "سفید سرامیکی", "colorNameEn": "White", "colorHex": "#F8F9FA", "storage": "512GB", "ram": "16GB", "priceToman": 75200000, "originalPriceToman": 78500000, "shelfLocation": "C-02", "initialStock": 3 }
+      ]
+    },
+    {
+      "id": "prod-xiaomi-14",
+      "slug": "xiaomi-14",
+      "brandSlug": "xiaomi",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل شیائومی مدل Xiaomi 14 5G",
+      "titleEn": "Xiaomi 14 5G Compact Flagship",
+      "modelName": "Xiaomi 14",
+      "badge": "پرچمدار کامپکت",
+      "ratingAverage": 4.8,
+      "reviewsCount": 63,
+      "isPublished": true,
+      "isFeatured": false,
+      "warrantyIndex": 0,
+      "descriptionFa": "پرچمدار خوش‌دست و پرقدرت با لنزهای اپتیکال لایکا، نمایشگر ۶.۳۶ اینچی خیره‌کننده با روشنایی ۳۰۰۰ نیت و شارژ سریع ۹۰ وات.",
+      "specs": {
+        "screen": "۶.۳۶ اینچ LTPO OLED 120Hz Dolby Vision",
+        "processor": "Snapdragon 8 Gen 3 (4nm)",
+        "mainCamera": "سه گانه ۵۰ مگاپیکسل با اپتیک لایکا",
+        "battery": "۴۶۱۰ میلی‌آمپرساعت",
+        "weight": "۱۹۳ گرم",
+        "os": "HyperOS",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuB3V1C5m8K0l7P2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2"
+      ],
+      "variants": [
+        { "sku": "CNA-XMI-14-512-GRN", "colorNameFa": "سبز یشمی", "colorNameEn": "Jade Green", "colorHex": "#556B2F", "storage": "512GB", "ram": "12GB", "priceToman": 51500000, "originalPriceToman": 54000000, "shelfLocation": "C-03", "initialStock": 4 },
+        { "sku": "CNA-XMI-14-512-BLK", "colorNameFa": "مشکی مات", "colorNameEn": "Black", "colorHex": "#232323", "storage": "512GB", "ram": "12GB", "priceToman": 51200000, "originalPriceToman": 53800000, "shelfLocation": "C-03", "initialStock": 4 }
+      ]
+    },
+    {
+      "id": "prod-xiaomi-13t-pro",
+      "slug": "xiaomi-13t-pro",
+      "brandSlug": "xiaomi",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل شیائومی مدل Xiaomi 13T Pro 5G",
+      "titleEn": "Xiaomi 13T Pro 5G Leica",
+      "modelName": "Xiaomi 13T Pro",
+      "badge": "شارژ فوق‌سریع ۱۲۰W",
+      "ratingAverage": 4.7,
+      "reviewsCount": 94,
+      "isPublished": true,
+      "isFeatured": false,
+      "warrantyIndex": 0,
+      "descriptionFa": "گوشی پرچمدار اقتصادی شیائومی با نرخ نوسازی شگفت‌انگیز ۱۴۴ هرتز، گواهی ضدآب IP68 و شارژ ۱۰۰ درصد در ۱۹ دقیقه.",
+      "specs": {
+        "screen": "۶.۶۷ اینچ CrystalRes AMOLED 144Hz",
+        "processor": "MediaTek Dimensity 9200+ (4nm)",
+        "mainCamera": "۵۰ مگاپیکسل لایکا + ۵۰ مگاپیکسل تله‌فوتو + ۱۲ مگاپیکسل",
+        "battery": "۵۰۰۰ میلی‌آمپرساعت با هایپرشارژ ۱۲۰ وات",
+        "weight": "۲۰۶ گرم",
+        "os": "MIUI 14 قابل ارتقا به HyperOS",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuB3V1C5m8K0l7P2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2"
+      ],
+      "variants": [
+        { "sku": "CNA-XMI-13TP-512-BLU", "colorNameFa": "آبی آلپاین (چرم)", "colorNameEn": "Alpine Blue", "colorHex": "#5A728E", "storage": "512GB", "ram": "12GB", "priceToman": 34800000, "originalPriceToman": 36900000, "shelfLocation": "C-04", "initialStock": 5 },
+        { "sku": "CNA-XMI-13TP-512-BLK", "colorNameFa": "مشکی شیشه‌ای", "colorNameEn": "Black", "colorHex": "#1A1A1A", "storage": "512GB", "ram": "12GB", "priceToman": 34500000, "originalPriceToman": 36500000, "shelfLocation": "C-04", "initialStock": 4 }
+      ]
+    },
+    {
+      "id": "prod-poco-f6-pro",
+      "slug": "poco-f6-pro",
+      "brandSlug": "xiaomi",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل شیائومی مدل POCO F6 Pro 5G",
+      "titleEn": "Xiaomi POCO F6 Pro 5G Gaming",
+      "modelName": "POCO F6 Pro",
+      "badge": "هیولای گیمینگ",
+      "ratingAverage": 4.8,
+      "reviewsCount": 112,
+      "isPublished": true,
+      "isFeatured": true,
+      "warrantyIndex": 0,
+      "descriptionFa": "قاتل پرچمدار گیمینگ مجهز به پردازنده اسنپدراگون 8 Gen 2، خنک‌کننده اتاق بخار LiquidCool 4.0 و نمایشگر فوق شفاف WQHD+.",
+      "specs": {
+        "screen": "۶.۶۷ اینچ Flow AMOLED WQHD+ 120Hz 4000 nits",
+        "processor": "Snapdragon 8 Gen 2 (4nm)",
+        "mainCamera": "۵۰ مگاپیکسل با لرزشگیر اپتیکال OIS",
+        "battery": "۵۰۰۰ میلی‌آمپرساعت با هایپرشارژ ۱۲۰ وات",
+        "weight": "۲۰۹ گرم",
+        "os": "HyperOS",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuB3V1C5m8K0l7P2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2"
+      ],
+      "variants": [
+        { "sku": "CNA-XMI-F6P-512-BLK", "colorNameFa": "مشکی کربنی", "colorNameEn": "Black", "colorHex": "#1E1E1E", "storage": "512GB", "ram": "12GB", "priceToman": 28900000, "originalPriceToman": 30500000, "shelfLocation": "C-05", "initialStock": 7 },
+        { "sku": "CNA-XMI-F6P-512-WHT", "colorNameFa": "سفید ماهتابی", "colorNameEn": "White", "colorHex": "#EAEAEA", "storage": "512GB", "ram": "12GB", "priceToman": 29100000, "originalPriceToman": 30800000, "shelfLocation": "C-05", "initialStock": 6 }
+      ]
+    },
+    {
+      "id": "prod-poco-x6-pro",
+      "slug": "poco-x6-pro",
+      "brandSlug": "xiaomi",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل شیائومی مدل POCO X6 Pro 5G",
+      "titleEn": "Xiaomi POCO X6 Pro 5G",
+      "modelName": "POCO X6 Pro",
+      "badge": "قهرمان سرعت و قدرت",
+      "ratingAverage": 4.8,
+      "reviewsCount": 185,
+      "isPublished": true,
+      "isFeatured": false,
+      "warrantyIndex": 0,
+      "descriptionFa": "سریع‌ترین گوشی میان‌رده با چیپست Dimensity 8300-Ultra، حافظه فوق سریع UFS 4.0 و نمایشگر کم‌حاشیه ۱.۵K.",
+      "specs": {
+        "screen": "۶.۶۷ اینچ CrystalRes AMOLED 120Hz",
+        "processor": "MediaTek Dimensity 8300-Ultra (4nm)",
+        "mainCamera": "۶۴ مگاپیکسل OIS + ۸ مگاپیکسل + ۲ مگاپیکسل",
+        "battery": "۵۰۰۰ میلی‌آمپرساعت با توربوشارژ ۶۷ وات",
+        "weight": "۱۸۶ گرم",
+        "os": "HyperOS",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuB3V1C5m8K0l7P2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2"
+      ],
+      "variants": [
+        { "sku": "CNA-XMI-X6P-256-YEL", "colorNameFa": "زرد اختصاصی پوکو", "colorNameEn": "Poco Yellow", "colorHex": "#FFCE00", "storage": "256GB", "ram": "8GB", "priceToman": 18200000, "originalPriceToman": 19500000, "shelfLocation": "C-06", "initialStock": 9 },
+        { "sku": "CNA-XMI-X6P-256-GRY", "colorNameFa": "خاکستری تیتانیومی", "colorNameEn": "Gray", "colorHex": "#505050", "storage": "256GB", "ram": "8GB", "priceToman": 17950000, "originalPriceToman": 19200000, "shelfLocation": "C-06", "initialStock": 7 }
+      ]
+    },
+    {
+      "id": "prod-pixel-9-pro-xl",
+      "slug": "pixel-9-pro-xl",
+      "brandSlug": "google",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل گوگل مدل Pixel 9 Pro XL 5G",
+      "titleEn": "Google Pixel 9 Pro XL 5G",
+      "modelName": "Pixel 9 Pro XL",
+      "badge": "هوش مصنوعی Gemini Pro",
+      "ratingAverage": 4.9,
+      "reviewsCount": 52,
+      "isPublished": true,
+      "isFeatured": true,
+      "warrantyIndex": 0,
+      "descriptionFa": "برترین دستاورد هوش مصنوعی گوگل با تراشه قدرتمند Tensor G4، دوربین پریسکوپ حرفه‌ای، ۱۶ گیگابایت رم و ۷ سال پشتیبانی تضمینی اندروید خالص.",
+      "specs": {
+        "screen": "۶.۸ اینچ Super Actua LTPO OLED 120Hz 3000 nits",
+        "processor": "Google Tensor G4 (4nm)",
+        "mainCamera": "۵۰ مگاپیکسل + ۴۸ مگاپیکسل پریسکوپ ۵X + ۴۸ مگاپیکسل اولتراواید",
+        "battery": "۵۰۶۰ میلی‌آمپرساعت با شارژ سریع ۳۷ وات",
+        "weight": "۲۲۱ گرم",
+        "os": "Android 14 خالص با دسترسی مستقیم Gemini",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8"
+      ],
+      "variants": [
+        { "sku": "CNA-GGL-P9PXL-256-OBS", "colorNameFa": "ابسیدین مشکی", "colorNameEn": "Obsidian", "colorHex": "#1F2124", "storage": "256GB", "ram": "16GB", "priceToman": 77500000, "originalPriceToman": 81000000, "shelfLocation": "D-01", "initialStock": 4 },
+        { "sku": "CNA-GGL-P9PXL-256-PRC", "colorNameFa": "سفید چینی", "colorNameEn": "Porcelain", "colorHex": "#F5F4F0", "storage": "256GB", "ram": "16GB", "priceToman": 77800000, "originalPriceToman": 81500000, "shelfLocation": "D-01", "initialStock": 4 }
+      ]
+    },
+    {
+      "id": "prod-pixel-9",
+      "slug": "pixel-9",
+      "brandSlug": "google",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل گوگل مدل Pixel 9 5G",
+      "titleEn": "Google Pixel 9 5G",
+      "modelName": "Pixel 9",
+      "badge": "هوشمند و روان",
+      "ratingAverage": 4.7,
+      "reviewsCount": 41,
+      "isPublished": true,
+      "isFeatured": false,
+      "warrantyIndex": 0,
+      "descriptionFa": "طراحی مدرن نوار دوربین شیشه‌ای، دستیار هوشمند Gemini Live، قابلیت افزودن عکاس به عکس دسته‌جمعی (Add Me) و نمایشگر فوق روشن Actua.",
+      "specs": {
+        "screen": "۶.۳ اینچ Actua OLED 120Hz 2700 nits",
+        "processor": "Google Tensor G4 (4nm)",
+        "mainCamera": "۵۰ مگاپیکسل عریض + ۴۸ مگاپیکسل فوق عریض",
+        "battery": "۴۷۰۰ میلی‌آمپرساعت",
+        "weight": "۱۹۸ گرم",
+        "os": "Android 14 خالص",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8"
+      ],
+      "variants": [
+        { "sku": "CNA-GGL-P9-128-PEO", "colorNameFa": "صورتی گل صدتومانی", "colorNameEn": "Peony", "colorHex": "#ECA0B2", "storage": "128GB", "ram": "12GB", "priceToman": 56200000, "originalPriceToman": 58500000, "shelfLocation": "D-02", "initialStock": 6 },
+        { "sku": "CNA-GGL-P9-256-OBS", "colorNameFa": "مشکی ابسیدین", "colorNameEn": "Obsidian", "colorHex": "#1F2124", "storage": "256GB", "ram": "12GB", "priceToman": 61900000, "originalPriceToman": 64500000, "shelfLocation": "D-02", "initialStock": 5 }
+      ]
+    },
+    {
+      "id": "prod-pixel-8a",
+      "slug": "pixel-8a",
+      "brandSlug": "google",
+      "categorySlug": "phones",
+      "titleFa": "گوشی موبایل گوگل مدل Pixel 8a 5G",
+      "titleEn": "Google Pixel 8a 5G",
+      "modelName": "Pixel 8a",
+      "badge": "بهترین دوربین میان‌رده",
+      "ratingAverage": 4.8,
+      "reviewsCount": 87,
+      "isPublished": true,
+      "isFeatured": false,
+      "warrantyIndex": 0,
+      "descriptionFa": "بهترین گزینه خرید اقتصادی گوگل با تراشه Tensor G3، نرخ نوسازی ۱۲۰ هرتز، پاک‌کننده جادویی صدا و تصویر و ضدآب بودن با IP67.",
+      "specs": {
+        "screen": "۶.۱ اینچ Actua OLED 120Hz",
+        "processor": "Google Tensor G3 (4nm)",
+        "mainCamera": "۶۴ مگاپیکسل OIS + ۱۳ مگاپیکسل اولتراواید",
+        "battery": "۴۴۹۲ میلی‌آمپرساعت",
+        "weight": "۱۸۸ گرم",
+        "os": "Android 14 خالص",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8"
+      ],
+      "variants": [
+        { "sku": "CNA-GGL-P8A-128-BAY", "colorNameFa": "آبی خلیجی", "colorNameEn": "Bay", "colorHex": "#8FB2DE", "storage": "128GB", "ram": "8GB", "priceToman": 31200000, "originalPriceToman": 32900000, "shelfLocation": "D-03", "initialStock": 6 },
+        { "sku": "CNA-GGL-P8A-128-OBS", "colorNameFa": "مشکی ابسیدین", "colorNameEn": "Obsidian", "colorHex": "#212121", "storage": "128GB", "ram": "8GB", "priceToman": 30900000, "originalPriceToman": 32500000, "shelfLocation": "D-03", "initialStock": 5 }
+      ]
+    },
+    {
+      "id": "prod-apple-watch-ultra-2",
+      "slug": "apple-watch-ultra-2",
+      "brandSlug": "apple",
+      "categorySlug": "smartwatches",
+      "titleFa": "ساعت هوشمند اپل مدل Apple Watch Ultra 2 بند تیتانیومی ۴۹ میلی‌متری",
+      "titleEn": "Apple Watch Ultra 2 GPS + Cellular 49mm Titanium",
+      "modelName": "Apple Watch Ultra 2",
+      "badge": "ماجراجویی بی‌مرز",
+      "ratingAverage": 4.9,
+      "reviewsCount": 49,
+      "isPublished": true,
+      "isFeatured": true,
+      "warrantyIndex": 1,
+      "descriptionFa": "سخت‌جان‌ترین ساعت اپل با بدنه تیتانیوم ۴۹ میلی‌متری، روشنایی خیره‌کننده ۳۰۰۰ نیت، سنسور عمق‌سنج غواصی و باتری تا ۷۲ ساعت در حالت کم‌مصرف.",
+      "specs": {
+        "screen": "۱.۹۲ اینچ Always-On Retina LTPO OLED 3000 nits",
+        "processor": "Apple S9 SiP با دوال‌کر NPU",
+        "battery": "تا ۳۶ ساعت مصرف معمولی، ۷۲ ساعت کم‌مصرف",
+        "weight": "۶۱.۴ گرم",
+        "resistance": "ضدآب تا ۱۰۰ متر و غواصی تا ۴۰ متر EN13319",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuD-1rZ2WbQ2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8"
+      ],
+      "variants": [
+        { "sku": "CNA-ACC-AWU2-49", "colorNameFa": "تیتانیوم طبیعی", "colorNameEn": "Natural Titanium", "colorHex": "#8E8B82", "storage": "64GB", "ram": "استاندارد", "priceToman": 48500000, "originalPriceToman": 51000000, "shelfLocation": "ACC-01", "initialStock": 6 }
+      ]
+    },
+    {
+      "id": "prod-airpods-pro-2-usbc",
+      "slug": "airpods-pro-2-usbc",
+      "brandSlug": "apple",
+      "categorySlug": "audio",
+      "titleFa": "هدفون بی‌سیم اپل مدل AirPods Pro 2 با درگاه USB-C",
+      "titleEn": "Apple AirPods Pro (2nd generation) with MagSafe Case USB-C",
+      "modelName": "AirPods Pro 2 USB-C",
+      "badge": "حذف نویز فعال ۲X",
+      "ratingAverage": 4.9,
+      "reviewsCount": 178,
+      "isPublished": true,
+      "isFeatured": true,
+      "warrantyIndex": 1,
+      "descriptionFa": "ایرپاد پرو ۲ با تراشه H2، حذف نویز هوشمند دو برابر نسل قبل، صدای فضایی سفارشی و کیس شارژ مجهز به اسپیکر جستجو و درگاه تایپ‌سی.",
+      "specs": {
+        "chip": "Apple H2 در هدفون، U1 در کیس شارژ",
+        "battery": "تا ۶ ساعت پخش مداوم، ۳۰ ساعت با کیس",
+        "featuresFa": "حذف نویز فعال (ANC)، صدای شفاف Adaptive Audio، ضد آب IP54",
+        "port": "USB-C و پشتیبانی کامل از شارژر MagSafe و اپل واچ",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4"
+      ],
+      "variants": [
+        { "sku": "CNA-ACC-APP2-TYPC", "colorNameFa": "سفید براق", "colorNameEn": "White", "colorHex": "#FFFFFF", "storage": "استاندارد", "ram": "استاندارد", "priceToman": 14200000, "originalPriceToman": 15500000, "shelfLocation": "ACC-02", "initialStock": 14 }
+      ]
+    },
+    {
+      "id": "prod-galaxy-buds-2-pro",
+      "slug": "galaxy-buds-2-pro",
+      "brandSlug": "samsung",
+      "categorySlug": "audio",
+      "titleFa": "هدفون بی‌سیم سامسونگ مدل Galaxy Buds 2 Pro",
+      "titleEn": "Samsung Galaxy Buds 2 Pro Hi-Fi Sound",
+      "modelName": "Galaxy Buds 2 Pro",
+      "badge": "صدای ۲۴ بیتی Hi-Fi",
+      "ratingAverage": 4.7,
+      "reviewsCount": 89,
+      "isPublished": true,
+      "isFeatured": false,
+      "warrantyIndex": 1,
+      "descriptionFa": "طراحی ارگونومیک ۱۵ درصد کوچک‌تر، صدای استودیویی ۲۴ بیت بی‌نقص، حذف نویز فعال هوشمند سه جهته و گواهی ضدآب IPX7.",
+      "specs": {
+        "audio": "صدای استودیویی ۲۴ بیتی Hi-Fi با کدک SSC",
+        "anc": "حذف نویز هوشمند با ۳ میکروفون High-SNR",
+        "battery": "تا ۵ ساعت با ANC روشن، ۱۸ ساعت با کیس",
+        "resistance": "مقاومت در برابر آب تا عمق ۱ متر به مدت ۳۰ دقیقه (IPX7)",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuD-1rZ2WbQ2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8"
+      ],
+      "variants": [
+        { "sku": "CNA-ACC-GB2P-BLK", "colorNameFa": "مشکی گرافیتی", "colorNameEn": "Graphite", "colorHex": "#2C2D30", "storage": "استاندارد", "ram": "استاندارد", "priceToman": 7450000, "originalPriceToman": 8200000, "shelfLocation": "ACC-03", "initialStock": 8 }
+      ]
+    },
+    {
+      "id": "prod-anker-737-powerbank",
+      "slug": "anker-737-powerbank",
+      "brandSlug": "anker",
+      "categorySlug": "chargers",
+      "titleFa": "پاوربانک فست شارژ انکر مدل Anker 737 Power Bank (PowerCore 24K)",
+      "titleEn": "Anker 737 Power Bank (PowerCore 24K) 140W Output",
+      "modelName": "Anker 737 PowerCore 24K",
+      "badge": "توان فوق‌العاده ۱۴۰ وات",
+      "ratingAverage": 4.9,
+      "reviewsCount": 65,
+      "isPublished": true,
+      "isFeatured": true,
+      "warrantyIndex": 1,
+      "descriptionFa": "پاوربانک پرچمدار با توان خروجی ۱۴۰ وات PD 3.1، نمایشگر دیجیتالی هوشمند برای پایش دقیق ولتاژ و آمپر لحظه‌ای و ظرفیت ۲۴۰۰۰ میلی‌آمپر.",
+      "specs": {
+        "capacity": "۲۴۰۰۰ میلی‌آمپرساعت (86.4Wh)",
+        "maxOutput": "۱۴۰ وات فوق‌سریع دوطرفه",
+        "ports": "دو پورت USB-C و یک پورت USB-A",
+        "display": "نمایشگر رنگی هوشمند نمایش توان، درصد باتری و زمان باقی‌مانده",
+        "weight": "۶۳۰ گرم",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4"
+      ],
+      "variants": [
+        { "sku": "CNA-ACC-ANK-737", "colorNameFa": "خاکستری تیره", "colorNameEn": "Dark Gray", "colorHex": "#3A3D40", "storage": "24000mAh", "ram": "140W", "priceToman": 7950000, "originalPriceToman": 8800000, "shelfLocation": "ACC-04", "initialStock": 10 }
+      ]
+    },
+    {
+      "id": "prod-anker-30w-gan-charger",
+      "slug": "anker-30w-gan-charger",
+      "brandSlug": "anker",
+      "categorySlug": "chargers",
+      "titleFa": "شارژر دیواری ۳۰ وات انکر مدل Anker 511 Charger (Nano 3)",
+      "titleEn": "Anker 511 Charger (Nano 3, 30W) GaN",
+      "modelName": "Anker 511 Nano 3",
+      "badge": "کوچک‌ترین شارژر GaN",
+      "ratingAverage": 4.8,
+      "reviewsCount": 144,
+      "isPublished": true,
+      "isFeatured": false,
+      "warrantyIndex": 1,
+      "descriptionFa": "شارژر دیواری فوق‌العاده جمع‌وجور GaN مجهز به فناوری PowerIQ 3.0، شارژ فوق سریع برای آیفون، آیپد و سامسونگ با ایمنی دمایی کامل.",
+      "specs": {
+        "output": "۳۰ وات Power Delivery",
+        "technology": "فناوری نیترید گالیوم GaN",
+        "ports": "یک پورت USB-C با کنترل هوشمند حرارت ActiveShield 2.0",
+        "compatibility": "سازگار با کلیه مدل‌های آیفون و سامسونگ",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4"
+      ],
+      "variants": [
+        { "sku": "CNA-ACC-ANK-30W", "colorNameFa": "سفید مات", "colorNameEn": "White", "colorHex": "#F9F9F9", "storage": "30W", "ram": "GaN", "priceToman": 1650000, "originalPriceToman": 1850000, "shelfLocation": "ACC-05", "initialStock": 15 }
+      ]
+    },
+    {
+      "id": "prod-nillkin-screen-protector",
+      "slug": "nillkin-screen-protector",
+      "brandSlug": "nillkin",
+      "categorySlug": "cases-screen",
+      "titleFa": "محافظ صفحه نمایش نیلکین مدل Amazing CP+ Pro برای iPhone 16 Pro Max",
+      "titleEn": "Nillkin Amazing CP+ Pro Anti-Explosion Glass for iPhone 16 Pro Max",
+      "modelName": "Nillkin CP+ Pro",
+      "badge": "سختی الماس 9H",
+      "ratingAverage": 4.8,
+      "reviewsCount": 92,
+      "isPublished": true,
+      "isFeatured": false,
+      "warrantyIndex": 1,
+      "descriptionFa": "شیشه ژاپنی AGC با لبه‌های قوس‌دار 2.5D، پوشش اولئوفوبیک ضداثرانگشت فوق‌العاده لغزنده و شفافیت ۹۹.۹ درصدی بدون افت کیفیت نمایشگر.",
+      "specs": {
+        "material": "شیشه سکوریت نانو AGC ژاپن",
+        "hardness": "درجه سختی 9H ضدخط و خش عمیق",
+        "thickness": "ضخامت فوق‌باریک ۰.۳۳ میلی‌متر با چسب کامل",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4"
+      ],
+      "variants": [
+        { "sku": "CNA-ACC-NIL-CPPRO", "colorNameFa": "شفاف با حاشیه مشکی", "colorNameEn": "Clear Black Edge", "colorHex": "#000000", "storage": "استاندارد", "ram": "استاندارد", "priceToman": 680000, "originalPriceToman": 790000, "shelfLocation": "ACC-06", "initialStock": 12 }
+      ]
+    },
+    {
+      "id": "prod-apple-clear-case-magsafe",
+      "slug": "apple-clear-case-magsafe",
+      "brandSlug": "apple",
+      "categorySlug": "cases-screen",
+      "titleFa": "قاب محافظ شفاف مگ‌سیف اپل برای iPhone 16 Pro Max",
+      "titleEn": "Apple iPhone 16 Pro Max Clear Case with MagSafe",
+      "modelName": "Apple Clear Case MagSafe",
+      "badge": "اورجینال اپل",
+      "ratingAverage": 4.7,
+      "reviewsCount": 54,
+      "isPublished": true,
+      "isFeatured": false,
+      "warrantyIndex": 1,
+      "descriptionFa": "کاور کریستالی شفاف اصلی اپل مجهز به آهنرباهای نئودیمیوم تراز دقیق مگ‌سیف و روکش ضداکسیداسیون برای جلوگیری از زردشدگی.",
+      "specs": {
+        "material": "پلی‌کربنات فوق شفاف و مواد انعطاف‌پذیر TPU",
+        "magsafe": "پشتیبانی کامل از اتصال مغناطیسی MagSafe و Qi2",
+        "protection": "محافظت دور تا دور دکمه‌ها و بامپر برجسته دوربین",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4"
+      ],
+      "variants": [
+        { "sku": "CNA-ACC-APL-MSCASE", "colorNameFa": "شفاف کریستالی", "colorNameEn": "Clear", "colorHex": "#FFFFFF", "storage": "استاندارد", "ram": "استاندارد", "priceToman": 3850000, "originalPriceToman": 4200000, "shelfLocation": "ACC-07", "initialStock": 9 }
+      ]
+    },
+    {
+      "id": "prod-anker-maggo-qi2-powerbank",
+      "slug": "anker-maggo-qi2-powerbank",
+      "brandSlug": "anker",
+      "categorySlug": "chargers",
+      "titleFa": "پاوربانک مغناطیسی وایرلس انکر مدل Anker MagGo Power Bank (10000mAh, 15W, Qi2)",
+      "titleEn": "Anker MagGo Power Bank (10,000mAh, 15W, Qi2-Certified)",
+      "modelName": "Anker MagGo Qi2 10K",
+      "badge": "گواهی رسمی Qi2 ۱۵W",
+      "ratingAverage": 4.9,
+      "reviewsCount": 73,
+      "isPublished": true,
+      "isFeatured": true,
+      "warrantyIndex": 1,
+      "descriptionFa": "نسل جدید شارژ بی‌سیم مغناطیسی با استاندارد بین‌المللی Qi2 و شارژ وایرلس ۱۵ وات معادل شارژ سیمی، به همراه پایه استند تاشو و نمایشگر هوشمند.",
+      "specs": {
+        "capacity": "۱۰۰۰۰ میلی‌آمپرساعت",
+        "wirelessOutput": "۱۵ وات واقعی مطابق پروتکل Qi2",
+        "wiredOutput": "۲۷ وات از طریق درگاه دوطرفه USB-C",
+        "stand": "پایه تاشوی مگنتی برای تماشای فیلم همزمان با شارژ",
+        "isExpressDelivery": true
+      },
+      "images": [
+        "https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4"
+      ],
+      "variants": [
+        { "sku": "CNA-ACC-ANK-QI2PB", "colorNameFa": "مشکی مات", "colorNameEn": "Black", "colorHex": "#232528", "storage": "10000mAh", "ram": "15W Qi2", "priceToman": 4650000, "originalPriceToman": 5100000, "shelfLocation": "ACC-08", "initialStock": 7 }
+      ]
+    }
+  ]
+}

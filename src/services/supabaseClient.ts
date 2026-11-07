@@ -317,18 +317,77 @@ export async function runSupabaseDiagnostics(): Promise<FullDiagnosticReport> {
           : 'آزمون Auth API به دلیل عدم وجود تنظیمات معتبر انجام نشد.',
       };
 
-  // Stage 3: REST API Availability (Honestly marked as NOT TESTABLE YET in Task 4.1)
-  const stage3Rest: Stage3RestResult = {
-    status: 'NOT_TESTABLE_YET',
-    message: 'وضعیت REST API در این مرحله قابل ارزیابی نیست (NOT TESTABLE YET).',
-    note: 'در تسک ۴.۱ به دلیل عدم ایجاد جدول، View یا RPC عمومی، ارزیابی REST API موکول به فاز ۴.۲ پس از استقرار اولین منبع داده است.',
-  };
+  // Stage 3: REST API Availability
+  let stage3Rest: Stage3RestResult;
+  if (!config.isValid) {
+    stage3Rest = {
+      status: 'SKIPPED',
+      message: 'آزمون REST API به دلیل عدم وجود تنظیمات معتبر انجام نشد.',
+      note: 'متغیرهای VITE_SUPABASE_URL و کلید عمومی را در .env.local تنظیم نمایید.',
+    };
+  } else if (DATA_SOURCE !== 'supabase') {
+    stage3Rest = {
+      status: 'SKIPPED',
+      message: 'پروژه در حالت Mock اجرا می‌شود. ارزیابی زنده REST API نیازمند فعال‌سازی VITE_DATA_SOURCE=supabase است.',
+      note: 'طراحی اسکیما و ویوی v_storefront_products در فاز ۴.۳ تکمیل شده و آماده اتصال ابری است.',
+    };
+  } else {
+    try {
+      const client = getSupabaseClient();
+      const { data, error } = await client.from('v_storefront_products').select('slug').limit(1);
+      if (error) {
+        stage3Rest = {
+          status: 'FAILED',
+          message: `خطای دسترسی به REST API: ${error.message}`,
+          note: 'از استقرار مایگریشن‌های پوشه supabase/migrations در پروژه ابری اطمینان حاصل فرمایید.',
+        };
+      } else {
+        stage3Rest = {
+          status: 'SUCCESS',
+          message: 'وب‌سرویس REST API با موفقیت پاسخ داد و ویوی فروشگاه در دسترس است.',
+          note: `تعداد رکورد بازیابی‌شده در آزمون پینگ: ${data?.length || 0}`,
+        };
+      }
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      stage3Rest = {
+        status: 'FAILED',
+        message: `خطای ارتباطی REST API: ${errMsg}`,
+        note: 'خطای اتصال به سرور دیتابیس ابری',
+      };
+    }
+  }
 
-  // Stage 4: Database Query Execution (Deferred)
-  const stage4Database: Stage4DbResult = {
-    status: 'DEFERRED',
-    message: 'اجرای کوئری دیتابیس منوط به طراحی و ایجاد جداول در مراحل بعدی است.',
-  };
+  // Stage 4: Database Query Execution
+  let stage4Database: Stage4DbResult;
+  if (!config.isValid || DATA_SOURCE !== 'supabase') {
+    stage4Database = {
+      status: 'DEFERRED',
+      message: 'اجرای کوئری دیتابیس در حالت Mock غیرفعال است (اسکیمای فاز ۴.۳ آماده استقرار ابری است).',
+    };
+  } else {
+    try {
+      const client = getSupabaseClient();
+      const { count, error } = await client.from('v_storefront_products').select('*', { count: 'exact', head: true });
+      if (error) {
+        stage4Database = {
+          status: 'FAILED',
+          message: `خطای اجرای کوئری دیتابیس: ${error.message}`,
+        };
+      } else {
+        stage4Database = {
+          status: 'SUCCESS',
+          message: `کوئری با موفقیت اجرا شد. تعداد کالاهای در دسترس ویترین: ${count ?? 'نامشخص'}`,
+        };
+      }
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      stage4Database = {
+        status: 'FAILED',
+        message: `خطای استعلام دیتابیس: ${errMsg}`,
+      };
+    }
+  }
 
   const report: FullDiagnosticReport = {
     timestamp: new Date().toISOString(),

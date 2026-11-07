@@ -21,11 +21,12 @@ import { CatalogSkeletonGrid } from '../components/ui/LoadingSkeleton';
 import { ErrorMessage } from '../components/ui/ErrorMessage';
 
 const ALL_BRANDS: { brand: Brand; count: number }[] = [
-  { brand: 'Apple', count: 32 },
-  { brand: 'Samsung', count: 46 },
-  { brand: 'Xiaomi', count: 28 },
-  { brand: 'Honor', count: 12 },
-  { brand: 'Motorola', count: 6 },
+  { brand: 'Apple', count: 7 },
+  { brand: 'Samsung', count: 6 },
+  { brand: 'Xiaomi', count: 5 },
+  { brand: 'Google', count: 3 },
+  { brand: 'Anker', count: 3 },
+  { brand: 'Nillkin', count: 1 },
 ];
 
 const STORAGE_OPTIONS = ['128GB', '256GB', '512GB', '1TB'];

@@ -9,7 +9,7 @@ import { PRODUCTS } from './mockData';
 import { DATA_SOURCE, assertValidDataSource } from './config';
 import { supabaseGateway } from './supabaseClient';
 
-const LOCAL_PRODUCTS_KEY = 'cna_store_products_v1';
+const LOCAL_PRODUCTS_KEY = 'cna_store_products_v2';
 
 // Seed or retrieve from localStorage in mock mode
 function getLocalProducts(): Product[] {
@@ -67,7 +67,7 @@ export const productService = {
     assertValidDataSource();
     if (DATA_SOURCE === 'supabase') {
       const client = supabaseGateway.getClient();
-      const { data, error } = await client.from('products').select('*');
+      const { data, error } = await client.from('v_storefront_products').select('*');
       if (error) {
         throw new Error(`خطای دریافت محصولات از سرور دیتابیس: ${error.message || 'خطای ناشناخته'}`);
       }
@@ -116,7 +116,7 @@ export const productService = {
     assertValidDataSource();
     if (DATA_SOURCE === 'supabase') {
       const client = supabaseGateway.getClient();
-      const { data, error } = await client.from('products').select('*').eq('slug', slug).single();
+      const { data, error } = await client.from('v_storefront_products').select('*').eq('slug', slug).single();
       if (error) {
         throw new Error(`خطا در یافتن محصول ${slug} از سرور: ${error.message}`);
       }
