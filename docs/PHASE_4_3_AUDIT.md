@@ -143,7 +143,9 @@ The migrations will be structured in four sequential, forward-only files:
    - Supabase Storage bucket initialization schema for `product-images` and RLS storage policies.
 5. `supabase/migrations/20261107000005_remediation_security_and_part_number.sql`
    - Forward-only migration resolving schema gaps, column-level security, view masking, and RPC constraints.
-6. `supabase/seed.sql`
+6. `supabase/migrations/20261107000006_atomic_transfers_and_overdraft_hardening.sql`
+   - Forward-only migration implementing dedicated atomic inter-warehouse transfers (`rpc_transfer_warehouse_stock`), stable `ERRCODE = '23514'` on overdrafts, and blocking standalone asymmetric transfers in `rpc_record_stock_movement`.
+7. `supabase/seed.sql`
    - Canonical non-destructive seed script with deterministic brands, categories, warranties, products, variants, warehouse `WH-CENTRAL`, opening inventory, and transactional reconciliation DO block.
 
 ---
@@ -217,13 +219,31 @@ Following the Phase 4.3 pre-implementation audit and initial deployment preparat
      - Missing SKU assertion using `WHERE NOT EXISTS (...)` with `string_agg`.
      - Duplicate SKU assertion using `GROUP BY s.sku HAVING COUNT(pv.id) > 1` with `string_agg`.
 
-### 9.6 Movement Types Alignment in RPC and Table Constraint
-- **Issue:** Table `stock_movements` check constraint allowed `transfer_out` and `transfer_in`, but `rpc_record_stock_movement` did not include them in its whitelist and validation logic.
-- **Remediation:** Updated `rpc_record_stock_movement` in migration 000005 to include:
-  - `transfer_out` with strict assertion `p_quantity_change < 0`
-  - `transfer_in` with strict assertion `p_quantity_change > 0`
+### 9.6 Evolution of Transfer Operations: Standalone Revocation & Dedicated Atomic RPC
+- **Issue:** The initial implementation accepted `transfer_out` (< 0) and `transfer_in` (> 0) in `rpc_record_stock_movement` as separate single-warehouse stock movements. This allowed callers to record asymmetric "half-transfers" without an atomic partner, risking ledger corruption.
+- **Remediation (Migration 000006):**
+  1. Standalone `transfer_out` and `transfer_in` calls inside `rpc_record_stock_movement` are strictly rejected with SQLSTATE `0A000` (`feature_not_supported`, `ERR_UNSUPPORTED_STANDALONE_TRANSFER`).
+  2. Implemented dedicated atomic transfer RPC `public.rpc_transfer_warehouse_stock`:
+     - Accepts `p_source_warehouse_id`, `p_destination_warehouse_id`, `p_variant_id`, `p_quantity`, `p_shelf_location_dest`, `p_notes`, `p_idempotency_key`.
+     - Acquires an advisory lock on the transfer key.
+     - Deterministically orders warehouse row locks (`LEAST` and `GREATEST` by UUID) to prevent deadlocks between concurrent bidirectional transfers.
+     - Validates source available inventory (`quantity_on_hand - reserved_qty >= p_quantity`).
+     - Atomically writes `transfer_out` (source) and `transfer_in` (destination) ledger movements.
+     - Updates both warehouse stock projections in the same transaction.
+     - Handles retries safely with `:OUT` and `:IN` sub-keys and validates identical parameters.
 
-### 9.7 Dual-Mode Frontend Compatibility Verification
+### 9.7 Machine-Readable Overdraft Error Handling & Test Reconciliation
+- **Issue:** The inventory RPC previously raised a Persian localized error message (`خطای کسری موجودی`) while the test suite checked for a different Persian string (`موجودی انبار ناکافی است`), creating false negative test failures.
+- **Remediation (Migration 000006):**
+  - Updated `rpc_record_stock_movement` and `rpc_transfer_warehouse_stock` to raise exceptions using standard PostgreSQL check constraint error code `USING ERRCODE = '23514'` with machine-readable identifier `ERR_INSUFFICIENT_STOCK`.
+  - Updated `supabase/tests/phase_4_3_verification.sql` to catch `check_violation` (SQLSTATE `23514`) and assert error conditions reliably across any locale.
+  - Ensured the test explicitly fails if the RPC permits an overdraft without throwing an exception.
+
+### 9.8 Real PostgreSQL Role & Concurrency Test Fixtures
+- **Security Role Fixture (`supabase/tests/phase_4_3_security_test.sql`):** Uses real PostgreSQL role switching (`SET LOCAL ROLE anon;`, `SET LOCAL ROLE authenticated;`, `SET LOCAL ROLE service_role;`, `RESET ROLE;`) inside a `BEGIN ... ROLLBACK` block to verify column-level denial on `cost_price_toman` (SQLSTATE `42501`), table denial on `warehouse_stock` (SQLSTATE `42501`), public read access to `v_storefront_products`, and RPC invocation blocks.
+- **Concurrency Test Fixture (`supabase/tests/concurrency_test.sql`):** Provides a two-session psql / Supabase SQL Editor test verifying that concurrent duplicate requests serialize on the advisory lock and return `idempotent_duplicate`, and that concurrent stock decrements serialize on row locks (`FOR UPDATE`) to prevent negative inventory balances.
+
+### 9.9 Dual-Mode Frontend Compatibility Verification
 - **Status:** The frontend remains 100% operational in both `mock` mode and `supabase` mode.
 - In `mock` mode, `src/services/mockData.ts` mirrors the canonical 26 products (18 smartphones + 8 accessories) from `src/data/canonicalCatalog.json`.
 - In `supabase` mode, `src/services/productService.ts` and `src/services/supabaseClient.ts` query `v_storefront_products`, verifying schema health without exposing internal warehouse mechanics.
@@ -231,21 +251,37 @@ Following the Phase 4.3 pre-implementation audit and initial deployment preparat
 
 ---
 
-## 10. Audit & Remediation Verification Checklist
+## 10. Audit & Verification Status Matrix
 
-| Checkpoint | Target | Status | Verification Method |
-| :--- | :--- | :--- | :--- |
-| **Catalog Count** | 26 Products | **VERIFIED** | `canonicalCatalog.json`, `mockData.ts`, Seed DO block |
-| **Category Distribution** | 18 Phones, 8 Accessories | **VERIFIED** | `canonicalCatalog.json`, Category filter tests |
-| **SKU Count** | 46 Unique SKUs | **VERIFIED** | Unique constraint, Seed DO block assertion |
-| **Inventory Quantity** | 296 Total Units (215 Phones + 81 Acc) | **VERIFIED** | Seed opening balance projection & ledger |
-| **Part Number Column** | `product_variants.part_number` | **VERIFIED** | Migration 000005, view contract, schema reflection |
-| **Cost Price Security** | Column-level SELECT revoked | **VERIFIED** | Migration 000005, PostgreSQL GRANT catalog |
-| **Warehouse Privacy** | Shelf/stock masked from public | **VERIFIED** | `v_storefront_products` projection inspection |
-| **Test Non-Destructiveness** | Transaction-safe with `ROLLBACK` | **VERIFIED** | `phase_4_3_verification.sql` test structure |
-| **Seed Repeatability** | Non-destructive image upserts | **VERIFIED** | `generateSeedSql.ts` conflict clause |
-| **Frontend Dual-Mode** | React 19 + TypeScript 0 lints | **VERIFIED** | `npm run lint` & `npm run build` |
+Every requirement and technical component is classified into one of six mutually exclusive statuses:
+1. **Implemented**: Code and SQL assets are written, syntactically verified, and committed.
+2. **Static review passed**: Formal schema, security policy, and algorithm logic passed senior architect static analysis.
+3. **Locally executed and passed**: Executed directly and verified in this local AI Studio workspace.
+4. **Remotely executed and passed**: Executed and verified against a live remote Supabase instance.
+5. **Not tested**: Verification requires runtime infrastructure (e.g. live PostgreSQL instance) not available locally.
+6. **Deferred**: Intentionally scheduled for Phase 4.4+.
+
+| Component / Requirement | Category | Execution Detail & Notes |
+| :--- | :--- | :--- |
+| **Catalog Master JSON (26 products, 46 SKUs)** | **Locally executed and passed** | `src/data/canonicalCatalog.json` invariant assertions passed |
+| **Seed Generator (`scripts/generateSeedSql.ts`)** | **Locally executed and passed** | Programmatic assertions verified: 26 prods, 46 SKUs, 296 units |
+| **Seed Output (`supabase/seed.sql`)** | **Locally executed and passed** | Generated with non-destructive image upserts & separated SKU checks |
+| **TypeScript Compilation (`tsc --noEmit`)** | **Locally executed and passed** | 0 type errors across frontend and generator scripts |
+| **Vite Bundle Build (`npm run build`)** | **Locally executed and passed** | Production client bundle built cleanly in 2.04s |
+| **Migrations 000001 to 000004** | **Static review passed** | Base RBAC, catalog, inventory, and initial storefront view DDL |
+| **Migration 000005 (Part No, RLS, Column Grants)** | **Static review passed** | Column-level security, part_number, view masking |
+| **Migration 000006 (Atomic Transfers & Overdraft)** | **Static review passed** | `rpc_transfer_warehouse_stock`, ERRCODE 23514, standalone rejection |
+| **Verification Test (`phase_4_3_verification.sql`)** | **Static review passed** | Non-destructive `ROLLBACK` test fixture prepared |
+| **Role Security Test (`phase_4_3_security_test.sql`)** | **Static review passed** | `SET LOCAL ROLE` permission test fixture prepared |
+| **Concurrency Test (`concurrency_test.sql`)** | **Static review passed** | Dual-session advisory and row-lock race condition test fixture |
+| **PostgreSQL Runtime SQL Tests (Live Engine)** | **Not tested** | No local PostgreSQL server or live cloud connection in this container |
+| **Multi-Warehouse Production Topology (WH-02+)** | **Deferred** | Phase 4.3 seeds `WH-CENTRAL`; regional warehouses deferred to Phase 4.4 |
+| **Orders, Checkout & Payments Tables** | **Deferred** | Formally documented in Phase 4.2; implementation deferred to Phase 4.4+ |
 
 ---
-**Audit Conclusion:** The Phase 4.3 database architecture, schema migrations, seed generator, security boundaries, and test suite are fully hardened, non-destructive, and ready for production deployment.
+**Audit Conclusion & Deployment Readiness:**
+- **Code & Assets Readiness:** The Phase 4.3 migrations (000001–000006), canonical seed generator, non-destructive test suites, and dual-mode frontend are fully implemented and passed static architectural review.
+- **Runtime Environment Disclosure:** Because the local container environment does not provide a live PostgreSQL database server, the SQL test suites (`phase_4_3_verification.sql`, `phase_4_3_security_test.sql`, `concurrency_test.sql`) are **Not tested locally** against a live DB engine.
+- **Staging Gate Requirement:** Prior to promoting Phase 4.3 to production, these test scripts must be executed against a live staging Supabase instance to achieve **Remotely executed and passed** status.
+
 
