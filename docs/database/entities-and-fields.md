@@ -579,6 +579,9 @@
 | `created_at` | `TIMESTAMPTZ` | NOT NULL | `NOW()` | زمان هدایت کاربر به صفحه بانک یا ثبت درخواست استرداد |
 | `verified_at` | `TIMESTAMPTZ` | NULL | — | زمان استعلام و تایید نهایی تراکنش |
 
+> *نکته انطباق معماری و آزمون‌های اعتبارسنجی (Schema NOT NULL vs. RPC Defense-in-Depth):*  
+> ستون `payment_id` در جدول `payment_transactions` به صورت سخت‌گیرانه با قید `NOT NULL` در سطح اسکیما تعریف شده است و هرگونه تلاش برای درج مستقیم یا تغییر به مقدار NULL توسط موتور دیتابیس با خطای قید رد می‌شود (آزمون سطح اسکیما). بنابراین در پایگاه داده هرگز تراکنش معتبری با `payment_id = NULL` ایجاد نخواهد شد. بررسی‌های صریح `v_tx.payment_id IS NULL OR v_parent_ptx.payment_id IS NULL` در توابع `rpc_initiate_gateway_refund` و `rpc_finalize_gateway_refund` منحصراً به عنوان لایه دفاع در عمق نرم‌افزاری (Defensive Programming) در زبان PL/pgSQL عمل می‌کنند و آزمون‌های زمان اجرای توابع RPC روی رکوردهای معتبر پایگاه داده صرفاً بر روی انطباق یا عدم انطباق شناسه‌های UUID متمرکز هستند.
+
 ---
 
 ### ۸.۷. جدول `payment_webhook_logs` (لاگ‌های امنیتی وبهوک درگاه‌ها و ضدتکرار)
