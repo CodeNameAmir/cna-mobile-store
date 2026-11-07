@@ -309,7 +309,7 @@ BEGIN
   END IF;
   RAISE NOTICE '✓ [Transfer] Atomic transfer recorded both transfer_out and transfer_in ledger movements.';
 
-  -- 5.3 Idempotent Repeat of Transfer
+  -- 5.3 Idempotent Repeat of Transfer (Identical Parameters)
   v_xfer_dup_res := public.rpc_transfer_warehouse_stock(
     p_source_warehouse_id := v_test_wh_id,
     p_destination_warehouse_id := v_test_dest_wh_id,
@@ -325,7 +325,136 @@ BEGIN
   END IF;
   RAISE NOTICE '✓ [Transfer] Repeated atomic transfer returned cached duplicate safely.';
 
-  -- 5.4 Transfer Overdraft Prevention
+  -- 5.4 Transfer Key Length Boundary Validation (Task 1)
+  -- 5.4.1 Maximum Accepted Length (Exactly 96 characters)
+  v_xfer_res := public.rpc_transfer_warehouse_stock(
+    p_source_warehouse_id := v_test_wh_id,
+    p_destination_warehouse_id := v_test_dest_wh_id,
+    p_variant_id := v_test_variant_id,
+    p_quantity := 1,
+    p_shelf_location_dest := 'SEC-01',
+    p_notes := 'Test max 96-char key',
+    p_idempotency_key := 'KEY-96-CHARS-12345678901234567890123456789012345678901234567890123456789012345678901234567890123456'
+  );
+
+  IF (v_xfer_res->>'success')::boolean <> true THEN
+    RAISE EXCEPTION 'TEST FAILED: Valid 96-character transfer key was rejected!';
+  END IF;
+  RAISE NOTICE '✓ [Transfer Key Length] Maximum accepted key length (96 characters) passed.';
+
+  -- 5.4.2 First Rejected Length (Exactly 97 characters -> SQLSTATE 22001)
+  BEGIN
+    PERFORM public.rpc_transfer_warehouse_stock(
+      p_source_warehouse_id := v_test_wh_id,
+      p_destination_warehouse_id := v_test_dest_wh_id,
+      p_variant_id := v_test_variant_id,
+      p_quantity := 1,
+      p_shelf_location_dest := 'SEC-01',
+      p_notes := 'Test 97-char key',
+      p_idempotency_key := 'KEY-97-CHARS-123456789012345678901234567890123456789012345678901234567890123456789012345678901234567'
+    );
+    RAISE EXCEPTION 'TEST FAILED: 97-character transfer key should have been rejected!';
+  EXCEPTION
+    WHEN string_data_right_truncation THEN
+      RAISE NOTICE '✓ [Transfer Key Length] 97-character key rejected with SQLSTATE 22001 (string_data_right_truncation).';
+    WHEN OTHERS THEN
+      IF SQLSTATE = '22001' OR SQLERRM LIKE '%ERR_IDEMPOTENCY_KEY_TOO_LONG%' THEN
+        RAISE NOTICE '✓ [Transfer Key Length] 97-character key rejected as expected.';
+      ELSE
+        RAISE;
+      END IF;
+  END;
+
+  -- 5.5 Transfer Retry Conflict Validations (Task 2)
+  -- 5.5.1 Same Key with Different Quantity -> Rejected
+  BEGIN
+    PERFORM public.rpc_transfer_warehouse_stock(
+      p_source_warehouse_id := v_test_wh_id,
+      p_destination_warehouse_id := v_test_dest_wh_id,
+      p_variant_id := v_test_variant_id,
+      p_quantity := 5, -- Different quantity (original was 2)
+      p_shelf_location_dest := 'SEC-01',
+      p_idempotency_key := 'TEST-XFER-KEY-001'
+    );
+    RAISE EXCEPTION 'TEST FAILED: Repeated transfer key with different quantity should have been rejected!';
+  EXCEPTION
+    WHEN unique_violation THEN
+      RAISE NOTICE '✓ [Transfer Retry] Different quantity rejected with SQLSTATE 23505.';
+    WHEN OTHERS THEN
+      IF SQLSTATE = '23505' OR SQLERRM LIKE '%ERR_IDEMPOTENCY_CONFLICT%' THEN
+        RAISE NOTICE '✓ [Transfer Retry] Conflicting quantity rejected as expected.';
+      ELSE
+        RAISE;
+      END IF;
+  END;
+
+  -- 5.5.2 Same Key with Different Destination -> Rejected
+  BEGIN
+    PERFORM public.rpc_transfer_warehouse_stock(
+      p_source_warehouse_id := v_test_wh_id,
+      p_destination_warehouse_id := v_test_wh_id, -- Different destination
+      p_variant_id := v_test_variant_id,
+      p_quantity := 2,
+      p_shelf_location_dest := 'SEC-01',
+      p_idempotency_key := 'TEST-XFER-KEY-001'
+    );
+    RAISE EXCEPTION 'TEST FAILED: Repeated transfer key with different destination should have been rejected!';
+  EXCEPTION
+    WHEN unique_violation THEN
+      RAISE NOTICE '✓ [Transfer Retry] Different destination rejected with SQLSTATE 23505.';
+    WHEN OTHERS THEN
+      IF SQLSTATE = '23505' OR SQLSTATE = '22023' OR SQLERRM LIKE '%ERR_IDEMPOTENCY_CONFLICT%' THEN
+        RAISE NOTICE '✓ [Transfer Retry] Conflicting destination rejected as expected.';
+      ELSE
+        RAISE;
+      END IF;
+  END;
+
+  -- 5.5.3 Same Key with Different Variant -> Rejected
+  BEGIN
+    PERFORM public.rpc_transfer_warehouse_stock(
+      p_source_warehouse_id := v_test_wh_id,
+      p_destination_warehouse_id := v_test_dest_wh_id,
+      p_variant_id := (SELECT id FROM public.product_variants WHERE sku <> 'CNA-APL-16PM-256-DES' LIMIT 1),
+      p_quantity := 2,
+      p_shelf_location_dest := 'SEC-01',
+      p_idempotency_key := 'TEST-XFER-KEY-001'
+    );
+    RAISE EXCEPTION 'TEST FAILED: Repeated transfer key with different variant should have been rejected!';
+  EXCEPTION
+    WHEN unique_violation THEN
+      RAISE NOTICE '✓ [Transfer Retry] Different variant rejected with SQLSTATE 23505.';
+    WHEN OTHERS THEN
+      IF SQLSTATE = '23505' OR SQLERRM LIKE '%ERR_IDEMPOTENCY_CONFLICT%' THEN
+        RAISE NOTICE '✓ [Transfer Retry] Conflicting variant rejected as expected.';
+      ELSE
+        RAISE;
+      END IF;
+  END;
+
+  -- 5.5.4 Same Key with Different Destination Shelf -> Rejected
+  BEGIN
+    PERFORM public.rpc_transfer_warehouse_stock(
+      p_source_warehouse_id := v_test_wh_id,
+      p_destination_warehouse_id := v_test_dest_wh_id,
+      p_variant_id := v_test_variant_id,
+      p_quantity := 2,
+      p_shelf_location_dest := 'DIFFERENT-SHELF-99', -- Different shelf
+      p_idempotency_key := 'TEST-XFER-KEY-001'
+    );
+    RAISE EXCEPTION 'TEST FAILED: Repeated transfer key with different destination shelf should have been rejected!';
+  EXCEPTION
+    WHEN unique_violation THEN
+      RAISE NOTICE '✓ [Transfer Retry] Different destination shelf rejected with SQLSTATE 23505.';
+    WHEN OTHERS THEN
+      IF SQLSTATE = '23505' OR SQLERRM LIKE '%ERR_IDEMPOTENCY_CONFLICT%' THEN
+        RAISE NOTICE '✓ [Transfer Retry] Conflicting destination shelf rejected as expected.';
+      ELSE
+        RAISE;
+      END IF;
+  END;
+
+  -- 5.6 Transfer Overdraft Prevention
   BEGIN
     PERFORM public.rpc_transfer_warehouse_stock(
       p_source_warehouse_id := v_test_wh_id,

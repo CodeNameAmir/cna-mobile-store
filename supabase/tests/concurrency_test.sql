@@ -1,14 +1,19 @@
 -- ==============================================================================
 -- CNA Mobile Store — Phase 4.3 Database Concurrency & Race Condition Verification
 -- Target: Supabase PostgreSQL / psql Dual-Session Testing
--- Instructions: Run Connection 1 statements in Session 1, and Connection 2 in Session 2.
+-- Architecture Note:
+--   1. Sections A and B below are MANUAL RUNTIME PROCEDURES requiring two simultaneous
+--      independent client connections (Session 1 and Session 2) to physically test race conditions.
+--   2. Section C is a SEQUENTIAL in-session idempotency check (NOT a concurrent test).
+--   3. For automated programmatic dual-connection testing, run the Node.js harness:
+--      npx tsx scripts/verifyConcurrencyHarness.ts
 -- ==============================================================================
 
 -- ==============================================================================
--- SCENARIO A: Concurrent Duplicate Requests with Same Idempotency Key
--- Goal: Verify transaction-scoped advisory locks serialize execution,
---       guaranteeing exactly ONE ledger movement is created, and the concurrent
---       call returns status 'idempotent_duplicate' with the same movement ID.
+-- SECTION A (MANUAL RUNTIME PROCEDURE): Concurrent Duplicate Requests with Same Key
+-- Goal: Verify transaction-scoped advisory locks serialize execution across two
+--       distinct client connections, guaranteeing exactly ONE ledger movement is
+--       created, and the concurrent call returns status 'idempotent_duplicate'.
 -- ==============================================================================
 
 /*
@@ -55,7 +60,7 @@ WHERE idempotency_key = 'CONCURRENCY-RACE-KEY-001';
 
 
 -- ==============================================================================
--- SCENARIO B: Concurrent Stock Reductions Against Same SKU (Overdraft Race Prevention)
+-- SECTION B (MANUAL RUNTIME PROCEDURE): Concurrent Stock Reductions (Overdraft Race Prevention)
 -- Goal: Given available stock of 5 units, two concurrent requests each attempt to
 --       sell 4 units (-4). With pessimistic row locking (FOR UPDATE), Session 1
 --       succeeds (leaving 1 unit), and Session 2 is serialized, evaluates 1 - 4 = -3,
@@ -115,7 +120,9 @@ WHERE warehouse_id = (SELECT id FROM public.warehouses WHERE code = 'WH-CENTRAL'
 
 
 -- ==============================================================================
--- AUTOMATED IN-SESSION SERIALIZED SIMULATION (Non-Destructive)
+-- SECTION C: SEQUENTIAL IN-SESSION IDEMPOTENCY VERIFICATION (Single Connection)
+-- NOTE: This is a purely sequential test executed in one database session.
+--       It tests caching and deduplication, but does NOT test concurrent interleaving.
 -- ==============================================================================
 
 BEGIN;
@@ -126,40 +133,39 @@ DECLARE
   v_var_id UUID;
   v_res1 JSONB;
   v_res2 JSONB;
-  v_stock_final INT;
 BEGIN
   SELECT id INTO STRICT v_wh_id FROM public.warehouses WHERE code = 'WH-CENTRAL';
   SELECT id INTO STRICT v_var_id FROM public.product_variants WHERE sku = 'CNA-APL-16PM-256-DES';
 
-  -- Test Serialization: Step 1
+  -- Sequential Call 1
   v_res1 := public.rpc_record_stock_movement(
     p_warehouse_id := v_wh_id,
     p_variant_id := v_var_id,
     p_quantity_change := 1,
     p_movement_type := 'purchase_inflow',
     p_shelf_location := 'B-14',
-    p_idempotency_key := 'TEST-SERIAL-RACE-001'
+    p_idempotency_key := 'TEST-SEQUENTIAL-IDEMP-001'
   );
 
-  -- Test Serialization: Step 2 with identical key
+  -- Sequential Call 2 with identical key
   v_res2 := public.rpc_record_stock_movement(
     p_warehouse_id := v_wh_id,
     p_variant_id := v_var_id,
     p_quantity_change := 1,
     p_movement_type := 'purchase_inflow',
     p_shelf_location := 'B-14',
-    p_idempotency_key := 'TEST-SERIAL-RACE-001'
+    p_idempotency_key := 'TEST-SEQUENTIAL-IDEMP-001'
   );
 
   IF (v_res1->>'status') <> 'recorded' OR (v_res2->>'status') <> 'idempotent_duplicate' THEN
-    RAISE EXCEPTION 'Concurrency test failed: Expected recorded then idempotent_duplicate';
+    RAISE EXCEPTION 'Sequential idempotency test failed: Expected recorded then idempotent_duplicate';
   END IF;
 
   IF (v_res1->>'movement_id') <> (v_res2->>'movement_id') THEN
-    RAISE EXCEPTION 'Concurrency test failed: Movement IDs differ between idempotent calls';
+    RAISE EXCEPTION 'Sequential idempotency test failed: Movement IDs differ between calls';
   END IF;
 
-  RAISE NOTICE '✓ [Concurrency Simulation] Serialized duplicate calls safely deduplicated to single movement ID.';
+  RAISE NOTICE '✓ [Sequential Idempotency] Single-session sequential repeat safely returned cached result.';
 END $$;
 
 ROLLBACK;

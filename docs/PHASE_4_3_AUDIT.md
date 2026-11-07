@@ -145,7 +145,9 @@ The migrations will be structured in four sequential, forward-only files:
    - Forward-only migration resolving schema gaps, column-level security, view masking, and RPC constraints.
 6. `supabase/migrations/20261107000006_atomic_transfers_and_overdraft_hardening.sql`
    - Forward-only migration implementing dedicated atomic inter-warehouse transfers (`rpc_transfer_warehouse_stock`), stable `ERRCODE = '23514'` on overdrafts, and blocking standalone asymmetric transfers in `rpc_record_stock_movement`.
-7. `supabase/seed.sql`
+7. `supabase/migrations/20261107000007_phase_4_3_final_hardening.sql`
+   - Forward-only migration enforcing transfer idempotency key length limits (<= 96 characters) and strict 5-parameter retry conflict validation.
+8. `supabase/seed.sql`
    - Canonical non-destructive seed script with deterministic brands, categories, warranties, products, variants, warehouse `WH-CENTRAL`, opening inventory, and transactional reconciliation DO block.
 
 ---
@@ -239,11 +241,45 @@ Following the Phase 4.3 pre-implementation audit and initial deployment preparat
   - Updated `supabase/tests/phase_4_3_verification.sql` to catch `check_violation` (SQLSTATE `23514`) and assert error conditions reliably across any locale.
   - Ensured the test explicitly fails if the RPC permits an overdraft without throwing an exception.
 
-### 9.8 Real PostgreSQL Role & Concurrency Test Fixtures
-- **Security Role Fixture (`supabase/tests/phase_4_3_security_test.sql`):** Uses real PostgreSQL role switching (`SET LOCAL ROLE anon;`, `SET LOCAL ROLE authenticated;`, `SET LOCAL ROLE service_role;`, `RESET ROLE;`) inside a `BEGIN ... ROLLBACK` block to verify column-level denial on `cost_price_toman` (SQLSTATE `42501`), table denial on `warehouse_stock` (SQLSTATE `42501`), public read access to `v_storefront_products`, and RPC invocation blocks.
-- **Concurrency Test Fixture (`supabase/tests/concurrency_test.sql`):** Provides a two-session psql / Supabase SQL Editor test verifying that concurrent duplicate requests serialize on the advisory lock and return `idempotent_duplicate`, and that concurrent stock decrements serialize on row locks (`FOR UPDATE`) to prevent negative inventory balances.
+### 9.8 Evolution of PostgreSQL Role & Permission Security Testing
+- **Issue:** Testing PostgreSQL permissions using `SET LOCAL ROLE` inside a single PL/pgSQL `DO` block can suffer from prepared statement plan caching and doesn't cleanly distinguish table-level privileges, column-level grants, RLS policies, and `SECURITY DEFINER` function execution contexts.
+- **Remediation (`supabase/tests/phase_4_3_security_test.sql`):**
+  - Restructured the test into sequential top-level SQL statements wrapped within `BEGIN; ... ROLLBACK;`.
+  - Injected realistic PostgREST JWT claims (`SET LOCAL "request.jwt.claims" = '...';`) alongside `SET LOCAL ROLE` to accurately simulate Supabase PostgREST caller identities (`anon`, `authenticated` customer, `authenticated` manager, `service_role`).
+  - Explicitly asserts column-level denial on `cost_price_toman` (SQLSTATE `42501`) while verifying public column reads succeed.
+  - Explicitly asserts table-level denial on `warehouse_stock` (SQLSTATE `42501`) for `anon`.
+  - Explicitly asserts that unprivileged customers receive 0 rows from `warehouse_stock` due to RLS filtering.
+  - Explicitly asserts that unauthorized users cannot execute `rpc_record_stock_movement` or `rpc_transfer_warehouse_stock`.
 
-### 9.9 Dual-Mode Frontend Compatibility Verification
+### 9.9 Distinct Levels of Concurrency & Race Condition Testing
+To avoid ambiguity between sequential in-session execution and real concurrent interleaving, the concurrency test suite is divided into three distinct mechanisms:
+1. **Manual Two-Session Interactive Runtime Procedures (`supabase/tests/concurrency_test.sql` Sections A & B):**
+   - Scenario A: Two distinct `psql` or Supabase SQL Editor sessions issue identical requests with the same idempotency key; Session 1 holds the advisory lock uncommitted, forcing Session 2 to block until commit, returning `idempotent_duplicate`.
+   - Scenario B: Two distinct sessions attempt concurrent reductions of 4 units against an initial stock of 5; pessimistic row locking (`FOR UPDATE`) serializes the transactions, granting 1 success and 1 overdraft rejection (`23514`), guaranteeing 0 negative stock.
+2. **Sequential Single-Session Idempotency Check (`supabase/tests/concurrency_test.sql` Section C):**
+   - Explicitly documented as a sequential single-session logic test for cached deduplication, NOT an automated concurrency test.
+3. **Automated Two-Connection Concurrency Harness (`scripts/verifyConcurrencyHarness.ts`):**
+   - A programmatic Node.js harness using the `pg` library that instantiates two independent database clients (`client1` and `client2`).
+   - Concurrently executes transfers and reductions via `Promise.all` and `Promise.allSettled`.
+   - Checks environment connection strings and documents exact execution commands.
+
+### 9.10 Final Hardening: Key Length Limits & 5-Parameter Retry Validation (Migration 000007)
+- **Task 1 (Idempotency Key Length):** `stock_movements.idempotency_key` is `VARCHAR(100)`. Because `rpc_transfer_warehouse_stock` appends `:OUT` (4 characters) and `:IN` (3 characters) to the base key, an input key longer than 96 characters would cause a database string length overflow on insert (`100 - 4 = 96`). Migration 000007 enforces an upfront length check:
+  ```sql
+  IF v_norm_idemp IS NOT NULL AND pg_catalog.length(v_norm_idemp) > 96 THEN
+    RAISE EXCEPTION 'ERR_IDEMPOTENCY_KEY_TOO_LONG: کلید ارسال‌شده برای انتقال بین‌انباری نمی‌تواند بیشتر از 96 کاراکتر باشد (طول ورودی: %).', pg_catalog.length(v_norm_idemp)
+      USING ERRCODE = '22001'; -- string_data_right_truncation
+  END IF;
+  ```
+- **Task 2 (Comprehensive 5-Parameter Retry Conflict Check):** On transfer retries, `rpc_transfer_warehouse_stock` now validates all 5 operational parameters:
+  1. Source warehouse (`warehouse_id`)
+  2. Destination warehouse (`destination_warehouse_id` / `reference_id`)
+  3. Product variant (`variant_id`)
+  4. Quantity (`quantity_change`)
+  5. Destination shelf location (`shelf_location`)
+  Any mismatch is immediately rejected with SQLSTATE `23505` (`ERR_IDEMPOTENCY_CONFLICT`), preventing repeated keys with divergent parameters from receiving cached results.
+
+### 9.11 Dual-Mode Frontend Compatibility Verification
 - **Status:** The frontend remains 100% operational in both `mock` mode and `supabase` mode.
 - In `mock` mode, `src/services/mockData.ts` mirrors the canonical 26 products (18 smartphones + 8 accessories) from `src/data/canonicalCatalog.json`.
 - In `supabase` mode, `src/services/productService.ts` and `src/services/supabaseClient.ts` query `v_storefront_products`, verifying schema health without exposing internal warehouse mechanics.
@@ -253,35 +289,54 @@ Following the Phase 4.3 pre-implementation audit and initial deployment preparat
 
 ## 10. Audit & Verification Status Matrix
 
-Every requirement and technical component is classified into one of six mutually exclusive statuses:
-1. **Implemented**: Code and SQL assets are written, syntactically verified, and committed.
-2. **Static review passed**: Formal schema, security policy, and algorithm logic passed senior architect static analysis.
-3. **Locally executed and passed**: Executed directly and verified in this local AI Studio workspace.
-4. **Remotely executed and passed**: Executed and verified against a live remote Supabase instance.
-5. **Not tested**: Verification requires runtime infrastructure (e.g. live PostgreSQL instance) not available locally.
-6. **Deferred**: Intentionally scheduled for Phase 4.4+.
+Every requirement and technical component is classified into one of the following explicit categories:
 
-| Component / Requirement | Category | Execution Detail & Notes |
+| Component / Requirement | Category | Verification Method & Notes |
 | :--- | :--- | :--- |
-| **Catalog Master JSON (26 products, 46 SKUs)** | **Locally executed and passed** | `src/data/canonicalCatalog.json` invariant assertions passed |
-| **Seed Generator (`scripts/generateSeedSql.ts`)** | **Locally executed and passed** | Programmatic assertions verified: 26 prods, 46 SKUs, 296 units |
-| **Seed Output (`supabase/seed.sql`)** | **Locally executed and passed** | Generated with non-destructive image upserts & separated SKU checks |
-| **TypeScript Compilation (`tsc --noEmit`)** | **Locally executed and passed** | 0 type errors across frontend and generator scripts |
-| **Vite Bundle Build (`npm run build`)** | **Locally executed and passed** | Production client bundle built cleanly in 2.04s |
-| **Migrations 000001 to 000004** | **Static review passed** | Base RBAC, catalog, inventory, and initial storefront view DDL |
-| **Migration 000005 (Part No, RLS, Column Grants)** | **Static review passed** | Column-level security, part_number, view masking |
-| **Migration 000006 (Atomic Transfers & Overdraft)** | **Static review passed** | `rpc_transfer_warehouse_stock`, ERRCODE 23514, standalone rejection |
-| **Verification Test (`phase_4_3_verification.sql`)** | **Static review passed** | Non-destructive `ROLLBACK` test fixture prepared |
-| **Role Security Test (`phase_4_3_security_test.sql`)** | **Static review passed** | `SET LOCAL ROLE` permission test fixture prepared |
-| **Concurrency Test (`concurrency_test.sql`)** | **Static review passed** | Dual-session advisory and row-lock race condition test fixture |
-| **PostgreSQL Runtime SQL Tests (Live Engine)** | **Not tested** | No local PostgreSQL server or live cloud connection in this container |
+| **Catalog Master JSON (26 products, 46 SKUs)** | **TypeScript/build checks executed and passed** | `src/data/canonicalCatalog.json` programmatic invariants passed |
+| **Seed Generator (`scripts/generateSeedSql.ts`)** | **TypeScript/build checks executed and passed** | Verified invariants: 26 prods, 18 phones, 8 acc, 46 SKUs, 296 units |
+| **Seed Output (`supabase/seed.sql`)** | **TypeScript/build checks executed and passed** | Generated with non-destructive image upserts & separated SKU checks |
+| **TypeScript Compilation (`tsc --noEmit`)** | **TypeScript/build checks executed and passed** | 0 type errors across frontend and generator scripts |
+| **Vite Bundle Build (`npm run build`)** | **TypeScript/build checks executed and passed** | Production client bundle built cleanly in Vite |
+| **Migrations 000001 to 000004** | **Static code review passed** | Base RBAC, catalog, inventory, and initial storefront view DDL |
+| **Migration 000005 (Part No, RLS, Column Grants)** | **Static code review passed** | Column-level security, part_number, view masking |
+| **Migration 000006 (Atomic Transfers & Overdraft)** | **Static code review passed** | `rpc_transfer_warehouse_stock`, ERRCODE 23514, standalone rejection |
+| **Migration 000007 (Key Length & Retry Conflicts)** | **Static code review passed** | Upfront 96-char key check, 5-parameter retry validation |
+| **Verification Suite (`phase_4_3_verification.sql`)** | **SQL scripts prepared but not executed** | Non-destructive `ROLLBACK` test fixture prepared |
+| **Role Security Suite (`phase_4_3_security_test.sql`)** | **SQL scripts prepared but not executed** | `SET LOCAL ROLE` permission and RLS test fixture prepared |
+| **Sequential Idempotency Checks (concurrency Section C)**| **SQL scripts prepared but not executed** | Sequential single-session test prepared |
+| **Manual Two-Session Concurrency Procedures** | **Manual test procedures not yet executed** | Interactive psql dual-session procedure documented in concurrency_test.sql |
+| **Automated Two-Connection Harness (`scripts/...`)** | **Automated two-connection concurrency tests actually executed** | Harness executed; logged `NOT TESTED` due to absent database URL |
+| **SQL Tests on Live PostgreSQL Engine** | **SQL tests actually executed against PostgreSQL** | None (0) executed locally due to no local PostgreSQL daemon |
+| **Security Tests on Live PostgreSQL Engine** | **Security tests actually executed** | None (0) executed locally due to no local PostgreSQL daemon |
 | **Multi-Warehouse Production Topology (WH-02+)** | **Deferred** | Phase 4.3 seeds `WH-CENTRAL`; regional warehouses deferred to Phase 4.4 |
 | **Orders, Checkout & Payments Tables** | **Deferred** | Formally documented in Phase 4.2; implementation deferred to Phase 4.4+ |
 
 ---
-**Audit Conclusion & Deployment Readiness:**
-- **Code & Assets Readiness:** The Phase 4.3 migrations (000001–000006), canonical seed generator, non-destructive test suites, and dual-mode frontend are fully implemented and passed static architectural review.
-- **Runtime Environment Disclosure:** Because the local container environment does not provide a live PostgreSQL database server, the SQL test suites (`phase_4_3_verification.sql`, `phase_4_3_security_test.sql`, `concurrency_test.sql`) are **Not tested locally** against a live DB engine.
-- **Staging Gate Requirement:** Prior to promoting Phase 4.3 to production, these test scripts must be executed against a live staging Supabase instance to achieve **Remotely executed and passed** status.
+
+## 11. Staging Deployment Checklist & Production Gate Blockers
+
+### Staging Deployment Checklist
+1. **Apply Migrations in Sequence:**
+   - `supabase/migrations/20261107000001_core_identity_rbac.sql`
+   - `supabase/migrations/20261107000002_catalog_schema.sql`
+   - `supabase/migrations/20261107000003_inventory_system.sql`
+   - `supabase/migrations/20261107000004_storefront_view_and_storage.sql`
+   - `supabase/migrations/20261107000005_remediation_security_and_part_number.sql`
+   - `supabase/migrations/20261107000006_atomic_transfers_and_overdraft_hardening.sql`
+   - `supabase/migrations/20261107000007_phase_4_3_final_hardening.sql`
+2. **Execute Seed:**
+   - Run `supabase/seed.sql` to populate canonical catalog and reconcile opening inventory (296 units).
+3. **Execute SQL Test Suites in Staging SQL Editor:**
+   - Execute `supabase/tests/phase_4_3_verification.sql` (Verifies catalog, overdraft, key length, retry conflicts, and rolls back).
+   - Execute `supabase/tests/phase_4_3_security_test.sql` (Verifies anon column/table denial, RLS, and rolls back).
+4. **Execute Automated Concurrency Harness against Staging:**
+   - `DATABASE_URL="postgres://postgres:<pwd>@<staging-host>:5432/postgres" npx tsx scripts/verifyConcurrencyHarness.ts`
+
+### Remaining Production Blockers
+- **Blocker 1 (Staging Verification Execution):** SQL migrations and test fixtures must be physically executed in a live PostgreSQL/Supabase staging environment to transition from **SQL scripts prepared but not executed** to **SQL tests actually executed against PostgreSQL** and **Security tests actually executed**.
+- **Blocker 2 (Live Concurrency Verification):** The two-connection concurrency harness must be executed against the staging database to confirm that advisory locks and row locks eliminate race conditions under real network latency.
+- **Blocker 3 (Cost Price RLS Audit in PostgREST):** Confirm via staging PostgREST REST API that anonymous requests querying `GET /rest/v1/product_variants?select=cost_price_toman` return HTTP 403 Forbidden.
+
 
 
