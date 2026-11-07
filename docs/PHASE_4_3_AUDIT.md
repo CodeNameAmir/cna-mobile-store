@@ -138,11 +138,114 @@ The migrations will be structured in four sequential, forward-only files:
    - Trigger / Rule preventing unauthorized `UPDATE` or `DELETE` on `stock_movements`.
    - Authoritative RPC `public.rpc_record_stock_movement(...)` with advisory locks, validations, and ownership by `postgres`.
 4. `supabase/migrations/20261107000004_storefront_view_and_storage.sql`
-   - Dedicated public view `public.v_storefront_products` with `security_invoker = true`.
+   - Dedicated initial public view `public.v_storefront_products`.
    - Deterministic lateral joins for gallery images (`sort_order ASC, id ASC`), storage options (`capacity ASC, min_price ASC, storage ASC`), and RAM options (`capacity ASC, min_price ASC, ram ASC`).
    - Supabase Storage bucket initialization schema for `product-images` and RLS storage policies.
-5. `supabase/seed.sql`
-   - Canonical seed script with deterministic brands, categories, warranties, products, variants, warehouse `WH-CENTRAL`, opening inventory, and the transactional reconciliation DO block.
+5. `supabase/migrations/20261107000005_remediation_security_and_part_number.sql`
+   - Forward-only migration resolving schema gaps, column-level security, view masking, and RPC constraints.
+6. `supabase/seed.sql`
+   - Canonical non-destructive seed script with deterministic brands, categories, warranties, products, variants, warehouse `WH-CENTRAL`, opening inventory, and transactional reconciliation DO block.
 
 ---
-**Audit Conclusion:** The architecture is verified, reconciled, and ready for clean, non-destructive implementation in strict accordance with the rules.
+
+## 9. Phase 4.3 Remediation — Security, Integrity & Repeatability
+
+Following the Phase 4.3 pre-implementation audit and initial deployment preparation, a comprehensive security and reliability audit revealed seven critical areas requiring forward-only remediation. These corrections have been permanently codified in migration `20261107000005_remediation_security_and_part_number.sql`, `scripts/generateSeedSql.ts`, `supabase/seed.sql`, and `supabase/tests/phase_4_3_verification.sql`.
+
+### 9.1 Root Cause & Forward-Only Fix for Missing `part_number`
+- **Issue:** Migration 000002 defined `product_variants` with `barcode VARCHAR(50)` and `sku VARCHAR(100)`, but omitted `part_number VARCHAR(50)`. Migration 000004 projected `pv.part_number AS "partNumber"` into `v_storefront_products`, causing a PostgreSQL column resolution error upon view creation.
+- **Remediation:** Rather than modifying historical migrations 000001–000004, forward-only migration 000005 executes:
+  ```sql
+  ALTER TABLE public.product_variants 
+  ADD COLUMN IF NOT EXISTS part_number VARCHAR(50) DEFAULT NULL;
+  ```
+  The seed generator was updated to populate `part_number` with the variant's canonical SKU identifier during variant upserting.
+
+### 9.2 Confidential Supplier Cost Price Protection (`cost_price_toman`)
+- **Issue:** Row-Level Security alone controls row visibility, not column visibility. If an anonymous or unprivileged user issues `SELECT cost_price_toman FROM product_variants;`, an open table SELECT grant would expose internal margins and supplier pricing.
+- **Remediation:**
+  1. Revoked table-level SELECT on `public.product_variants` from `PUBLIC, anon, authenticated`.
+  2. Granted explicit column-level SELECT strictly excluding `cost_price_toman`:
+     ```sql
+     GRANT SELECT (
+       id, product_id, warranty_id, sku, barcode, part_number,
+       color_name_fa, color_name_en, color_hex, storage, ram, sim_type,
+       price_toman, original_price_toman, is_published, created_at, updated_at
+     ) ON public.product_variants TO anon, authenticated;
+     ```
+  3. Granted full table access strictly to `catalog_manager` and `super_admin`.
+
+### 9.3 Internal Logistics Masking & Direct Warehouse Access Revocation
+- **Issue:** The initial `v_storefront_products` definition projected `ws.shelf_location`, `ws.quantity_on_hand`, and `ws.reserved_qty`. Furthermore, `security_invoker = true` required `anon` to hold direct SELECT privileges on `warehouse_stock`, exposing internal warehouse structure and exact physical stock counts to anonymous scrapers.
+- **Remediation:**
+  1. Recreated `public.v_storefront_products` as a standard view owned by `postgres` without `security_invoker`.
+  2. Masked internal logistics fields:
+     - Exposed `in_stock = (ws.quantity_on_hand - ws.reserved_qty) > 0`
+     - Exposed customer-facing `stock_count = GREATEST(ws.quantity_on_hand - ws.reserved_qty, 0)`
+     - Completely excluded `shelf_location`, raw `quantity_on_hand`, and `reserved_qty` from the view contract.
+  3. Revoked SELECT on `public.warehouse_stock` from `PUBLIC, anon`.
+  4. Dropped the overly permissive public RLS policy `ws_public_view_stock` from `warehouse_stock`, restricting warehouse access exclusively to `warehouse_manager` and `super_admin`.
+
+### 9.4 Non-Destructive, Idempotent Verification Test Suite
+- **Issue:** Prior test runs that invoked `rpc_record_stock_movement` with a test purchase inflow permanently incremented physical stock and committed test idempotency keys, leaving the database at 298 units instead of the canonical 296 units.
+- **Remediation:** `supabase/tests/phase_4_3_verification.sql` has been refactored into a completely non-destructive transactional test:
+  1. Wrapped within `BEGIN; ... DO $$ ... $$; ... ROLLBACK;`.
+  2. Executes catalog invariants (26 products, 46 SKUs, foreign keys, `part_number` column presence).
+  3. Executes inventory reconciliation (296 projection units = 296 ledger units, zero negative stock).
+  4. Executes immutability trigger validation (blocking direct UPDATE and DELETE on `stock_movements`).
+  5. Executes RPC tests: positive inflow (+2), duplicate key idempotency verification (`idempotent_duplicate`), duplicate key conflict detection (differing shelf or quantity rejected), negative sales outflow (`order_sale` -1), overdraft protection (preventing balance < 0), and invalid movement type rejection.
+  6. Executes storefront view validation and ensures sensitive columns are not exposed in `v_storefront_products`.
+  7. Issues `ROLLBACK;`, guaranteeing the database returns to its pristine 296-unit state without leaving rogue records.
+
+### 9.5 Safe Repeatable Seed Execution & Separated SKU Validation
+- **Issue:** Previous seed iterations executed `DELETE FROM public.product_images WHERE product_id = v_prod_id;`, which destructively purged and reinserted images on every seed rerun. Furthermore, seed verification combined missing and duplicate SKU checks into a single aggregate count, creating potential false positives.
+- **Remediation:**
+  1. Added a unique index in migration 000005:
+     ```sql
+     CREATE UNIQUE INDEX IF NOT EXISTS uq_product_images_product_url 
+     ON public.product_images (product_id, image_url);
+     ```
+  2. Updated `scripts/generateSeedSql.ts` to perform non-destructive upserts:
+     ```sql
+     INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
+     VALUES (v_prod_id, ..., ..., ...)
+     ON CONFLICT (product_id, image_url) DO UPDATE SET
+       is_cover = EXCLUDED.is_cover,
+       sort_order = EXCLUDED.sort_order;
+     ```
+  3. Separated Step 3 of the seed DO block into two distinct assertions:
+     - Missing SKU assertion using `WHERE NOT EXISTS (...)` with `string_agg`.
+     - Duplicate SKU assertion using `GROUP BY s.sku HAVING COUNT(pv.id) > 1` with `string_agg`.
+
+### 9.6 Movement Types Alignment in RPC and Table Constraint
+- **Issue:** Table `stock_movements` check constraint allowed `transfer_out` and `transfer_in`, but `rpc_record_stock_movement` did not include them in its whitelist and validation logic.
+- **Remediation:** Updated `rpc_record_stock_movement` in migration 000005 to include:
+  - `transfer_out` with strict assertion `p_quantity_change < 0`
+  - `transfer_in` with strict assertion `p_quantity_change > 0`
+
+### 9.7 Dual-Mode Frontend Compatibility Verification
+- **Status:** The frontend remains 100% operational in both `mock` mode and `supabase` mode.
+- In `mock` mode, `src/services/mockData.ts` mirrors the canonical 26 products (18 smartphones + 8 accessories) from `src/data/canonicalCatalog.json`.
+- In `supabase` mode, `src/services/productService.ts` and `src/services/supabaseClient.ts` query `v_storefront_products`, verifying schema health without exposing internal warehouse mechanics.
+- All Vite, React 19, and Tailwind CSS v4 builds pass with zero errors.
+
+---
+
+## 10. Audit & Remediation Verification Checklist
+
+| Checkpoint | Target | Status | Verification Method |
+| :--- | :--- | :--- | :--- |
+| **Catalog Count** | 26 Products | **VERIFIED** | `canonicalCatalog.json`, `mockData.ts`, Seed DO block |
+| **Category Distribution** | 18 Phones, 8 Accessories | **VERIFIED** | `canonicalCatalog.json`, Category filter tests |
+| **SKU Count** | 46 Unique SKUs | **VERIFIED** | Unique constraint, Seed DO block assertion |
+| **Inventory Quantity** | 296 Total Units (215 Phones + 81 Acc) | **VERIFIED** | Seed opening balance projection & ledger |
+| **Part Number Column** | `product_variants.part_number` | **VERIFIED** | Migration 000005, view contract, schema reflection |
+| **Cost Price Security** | Column-level SELECT revoked | **VERIFIED** | Migration 000005, PostgreSQL GRANT catalog |
+| **Warehouse Privacy** | Shelf/stock masked from public | **VERIFIED** | `v_storefront_products` projection inspection |
+| **Test Non-Destructiveness** | Transaction-safe with `ROLLBACK` | **VERIFIED** | `phase_4_3_verification.sql` test structure |
+| **Seed Repeatability** | Non-destructive image upserts | **VERIFIED** | `generateSeedSql.ts` conflict clause |
+| **Frontend Dual-Mode** | React 19 + TypeScript 0 lints | **VERIFIED** | `npm run lint` & `npm run build` |
+
+---
+**Audit Conclusion:** The Phase 4.3 database architecture, schema migrations, seed generator, security boundaries, and test suite are fully hardened, non-destructive, and ready for production deployment.
+

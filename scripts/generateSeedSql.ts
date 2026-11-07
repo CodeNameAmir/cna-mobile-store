@@ -200,28 +200,31 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 `);
 
     p.images.forEach((imgUrl, imgIdx) => {
       lines.push(`  INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, ${escapeSql(imgUrl)}, ${imgIdx === 0}, ${imgIdx});`);
+  VALUES (v_prod_id, ${escapeSql(imgUrl)}, ${imgIdx === 0}, ${imgIdx})
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;`);
     });
 
     lines.push('');
     lines.push('  -- Variants');
     for (const v of p.variants) {
       lines.push(`  INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, ${escapeSql(v.sku)}, ${escapeSql(v.colorNameFa)}, ${escapeSql(v.colorNameEn)}, ${escapeSql(v.colorHex)},
+    v_prod_id, v_war_id, ${escapeSql(v.sku)}, ${escapeSql(v.sku)}, ${escapeSql(v.colorNameFa)}, ${escapeSql(v.colorNameEn)}, ${escapeSql(v.colorHex)},
     ${escapeSql(v.storage)}, ${escapeSql(v.ram || null)}, ${v.priceToman}, ${v.originalPriceToman || 'NULL'},
     ${Math.round(v.priceToman * 0.85)}, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;`);
     }
@@ -239,7 +242,8 @@ DECLARE
   v_wh_id UUID;
   v_wh_count INT;
   v_expected_sku_count INT := 46;
-  v_matched_sku_count INT;
+  v_missing_skus TEXT;
+  v_duplicate_skus TEXT;
   v_existing_ws public.warehouse_stock%ROWTYPE;
   v_existing_sm public.stock_movements%ROWTYPE;
   v_global_sm public.stock_movements%ROWTYPE;
@@ -275,14 +279,27 @@ BEGIN
   lines.push(seedValues + ';');
   lines.push('');
 
-  lines.push(`  -- 3. Verify All Expected SKUs Exist in product_variants
-  SELECT COUNT(*) INTO v_matched_sku_count
+  lines.push(`  -- 3. Invariant Validations: Separate Missing SKUs and Duplicate SKUs Checks
+  -- 3.1 Check for Missing SKUs
+  SELECT string_agg(s.sku, ', ') INTO v_missing_skus
   FROM temp_opening_seed s
-  JOIN public.product_variants pv ON s.sku = pv.sku;
+  WHERE NOT EXISTS (
+    SELECT 1 FROM public.product_variants pv WHERE pv.sku = s.sku
+  );
 
-  IF v_matched_sku_count <> v_expected_sku_count THEN
-    RAISE EXCEPTION 'خطای انطباق کاتالوگ: از % تنوع مورد انتظار، فقط % تنوع در جدول product_variants یافت شد.',
-      v_expected_sku_count, v_matched_sku_count;
+  IF v_missing_skus IS NOT NULL THEN
+    RAISE EXCEPTION 'خطای انطباق کاتالوگ: تنوع‌های زیر در جدول product_variants یافت نشدند: %', v_missing_skus;
+  END IF;
+
+  -- 3.2 Check for Duplicate SKUs in product_variants
+  SELECT string_agg(s.sku, ', ') INTO v_duplicate_skus
+  FROM temp_opening_seed s
+  JOIN public.product_variants pv ON s.sku = pv.sku
+  GROUP BY s.sku
+  HAVING COUNT(pv.id) > 1;
+
+  IF v_duplicate_skus IS NOT NULL THEN
+    RAISE EXCEPTION 'خطای انطباق کاتالوگ: تنوع‌های زیر بیش از یک بار در جدول product_variants ثبت شده‌اند: %', v_duplicate_skus;
   END IF;
 
   -- 4. Safe Fail-Fast Processing & Full Ledger Reconciliation for Every SKU

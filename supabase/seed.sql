@@ -96,49 +96,57 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCIFVT994X_YGWzgqB6D5mcpNaVlf0pDu5NHXuFmURSzQJYjC16UDsjk4VND1sLXUeMY-7mAGZyJFPYbrHEP5LffWiimWZGC4fMA81fF8nJOc-ilKR1CFR1KTaPPjPT4NKI7BiJGp7Xf65e9ymrhKNzvWZSAPsrGLYHgVvYVUmx4TA2wAKzwh3zrTd53ow9-ju616B9pknJy49l2kSnIhWALJOYU5YscPysDQ5fDhP_o6r8WZxc2ljKqA', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCIFVT994X_YGWzgqB6D5mcpNaVlf0pDu5NHXuFmURSzQJYjC16UDsjk4VND1sLXUeMY-7mAGZyJFPYbrHEP5LffWiimWZGC4fMA81fF8nJOc-ilKR1CFR1KTaPPjPT4NKI7BiJGp7Xf65e9ymrhKNzvWZSAPsrGLYHgVvYVUmx4TA2wAKzwh3zrTd53ow9-ju616B9pknJy49l2kSnIhWALJOYU5YscPysDQ5fDhP_o6r8WZxc2ljKqA', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDYpszsyvAqBJ7cTtRXQoeeP8mJptNSgpHPgS5PwO_tsDv0MstzES6y3Y37vyxkv3tfDeJrz1R48HtCynLKMm4rih1DlMwjWG8DHDlOAJqYwsSCsypnPP-WYgzO46pLOuBumLi1LTvJE3l71CCjphKl65PcwnK9Xky27j_uuf3LD-y_UYjarkXJ9K_gXFDLAc7XlmEtcx1KguHh0H64OEXBG3qxhVCYwTHgZDpuw7tCeBLcQBKPv4mkhQ', false, 1);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDYpszsyvAqBJ7cTtRXQoeeP8mJptNSgpHPgS5PwO_tsDv0MstzES6y3Y37vyxkv3tfDeJrz1R48HtCynLKMm4rih1DlMwjWG8DHDlOAJqYwsSCsypnPP-WYgzO46pLOuBumLi1LTvJE3l71CCjphKl65PcwnK9Xky27j_uuf3LD-y_UYjarkXJ9K_gXFDLAc7XlmEtcx1KguHh0H64OEXBG3qxhVCYwTHgZDpuw7tCeBLcQBKPv4mkhQ', false, 1)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-APL-16PM-256-DES', 'تیتانیوم صحرایی', 'Desert Titanium', '#C5B4A0',
+    v_prod_id, v_war_id, 'CNA-APL-16PM-256-DES', 'CNA-APL-16PM-256-DES', 'تیتانیوم صحرایی', 'Desert Titanium', '#C5B4A0',
     '256GB', '8GB', 94200000, 98000000,
     80070000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-APL-16PM-256-BLK', 'تیتانیوم مشکی', 'Black Titanium', '#2A2B2D',
+    v_prod_id, v_war_id, 'CNA-APL-16PM-256-BLK', 'CNA-APL-16PM-256-BLK', 'تیتانیوم مشکی', 'Black Titanium', '#2A2B2D',
     '256GB', '8GB', 93800000, 97500000,
     79730000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-APL-16PM-512-DES', 'تیتانیوم صحرایی', 'Desert Titanium', '#C5B4A0',
+    v_prod_id, v_war_id, 'CNA-APL-16PM-512-DES', 'CNA-APL-16PM-512-DES', 'تیتانیوم صحرایی', 'Desert Titanium', '#C5B4A0',
     '512GB', '8GB', 108500000, 112000000,
     92225000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -171,35 +179,39 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDYpszsyvAqBJ7cTtRXQoeeP8mJptNSgpHPgS5PwO_tsDv0MstzES6y3Y37vyxkv3tfDeJrz1R48HtCynLKMm4rih1DlMwjWG8DHDlOAJqYwsSCsypnPP-WYgzO46pLOuBumLi1LTvJE3l71CCjphKl65PcwnK9Xky27j_uuf3LD-y_UYjarkXJ9K_gXFDLAc7XlmEtcx1KguHh0H64OEXBG3qxhVCYwTHgZDpuw7tCeBLcQBKPv4mkhQ', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDYpszsyvAqBJ7cTtRXQoeeP8mJptNSgpHPgS5PwO_tsDv0MstzES6y3Y37vyxkv3tfDeJrz1R48HtCynLKMm4rih1DlMwjWG8DHDlOAJqYwsSCsypnPP-WYgzO46pLOuBumLi1LTvJE3l71CCjphKl65PcwnK9Xky27j_uuf3LD-y_UYjarkXJ9K_gXFDLAc7XlmEtcx1KguHh0H64OEXBG3qxhVCYwTHgZDpuw7tCeBLcQBKPv4mkhQ', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-APL-16P-256-NAT', 'تیتانیوم طبیعی', 'Natural Titanium', '#8E8B82',
+    v_prod_id, v_war_id, 'CNA-APL-16P-256-NAT', 'CNA-APL-16P-256-NAT', 'تیتانیوم طبیعی', 'Natural Titanium', '#8E8B82',
     '256GB', '8GB', 83500000, 86000000,
     70975000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-APL-16P-256-WHT', 'تیتانیوم سفید', 'White Titanium', '#E3E4E5',
+    v_prod_id, v_war_id, 'CNA-APL-16P-256-WHT', 'CNA-APL-16P-256-WHT', 'تیتانیوم سفید', 'White Titanium', '#E3E4E5',
     '256GB', '8GB', 83900000, 86500000,
     71315000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -232,35 +244,39 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCnhMSBj-r1d_rG__Jqa8cjnApWRYRTihPMGHKWdNdZbXvyaJctP1Khen0nqBIUk3D8vkkpjEtlqQ8r1BUUjUCjJrwmV0md9GU-XjK0Qz-P0X76jAOFMg0WDTTWr16z6a5qHuWD99Hapr3S9q39z7R-WbaXNWw5rQAVxdLB8lTMS3f13NH8ZRRzJdLiDzCL8VxAvJ8jHyoRZtM_qX-DRHPLYDJbBUFodOS2vNGj_K1FqzWZaZmx9xpWyA', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCnhMSBj-r1d_rG__Jqa8cjnApWRYRTihPMGHKWdNdZbXvyaJctP1Khen0nqBIUk3D8vkkpjEtlqQ8r1BUUjUCjJrwmV0md9GU-XjK0Qz-P0X76jAOFMg0WDTTWr16z6a5qHuWD99Hapr3S9q39z7R-WbaXNWw5rQAVxdLB8lTMS3f13NH8ZRRzJdLiDzCL8VxAvJ8jHyoRZtM_qX-DRHPLYDJbBUFodOS2vNGj_K1FqzWZaZmx9xpWyA', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-APL-16PL-128-BLU', 'آبی اقیانوسی', 'Ultramarine', '#3B5998',
+    v_prod_id, v_war_id, 'CNA-APL-16PL-128-BLU', 'CNA-APL-16PL-128-BLU', 'آبی اقیانوسی', 'Ultramarine', '#3B5998',
     '128GB', '8GB', 67500000, 69900000,
     57375000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-APL-16PL-256-PNK', 'صورتی ملایم', 'Pink', '#FAD0C4',
+    v_prod_id, v_war_id, 'CNA-APL-16PL-256-PNK', 'CNA-APL-16PL-256-PNK', 'صورتی ملایم', 'Pink', '#FAD0C4',
     '256GB', '8GB', 74500000, 77000000,
     63325000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -293,35 +309,39 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuC5kSzm6rGNtqf2TLpCwNu3ngxb9coi9iSj3QP6EdRafiq_uV5dseNVJhtt8ZVDc7hEuEaCmB6Pt5L41IdCFFu6KkDOGXlYJU6805lV8aANbzQeCYURmSztbBDZO5-x8pM9chD8nL8sf6CbwMIZ5SfKfPA2Yz4fZ40W19NEzC9TPHLHBjCFU7T-8-N4mBNYlgSbPEWXP1s-aU1qd9awBg_91nBy3Z3x6f9u9S7eBPPXK4LaGosIaDvPHw', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuC5kSzm6rGNtqf2TLpCwNu3ngxb9coi9iSj3QP6EdRafiq_uV5dseNVJhtt8ZVDc7hEuEaCmB6Pt5L41IdCFFu6KkDOGXlYJU6805lV8aANbzQeCYURmSztbBDZO5-x8pM9chD8nL8sf6CbwMIZ5SfKfPA2Yz4fZ40W19NEzC9TPHLHBjCFU7T-8-N4mBNYlgSbPEWXP1s-aU1qd9awBg_91nBy3Z3x6f9u9S7eBPPXK4LaGosIaDvPHw', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-APL-16-128-BLK', 'مشکی عمیق', 'Black', '#1F2022',
+    v_prod_id, v_war_id, 'CNA-APL-16-128-BLK', 'CNA-APL-16-128-BLK', 'مشکی عمیق', 'Black', '#1F2022',
     '128GB', '8GB', 58500000, 61000000,
     49725000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-APL-16-128-WHT', 'سفید کریستالی', 'White', '#F5F5F7',
+    v_prod_id, v_war_id, 'CNA-APL-16-128-WHT', 'CNA-APL-16-128-WHT', 'سفید کریستالی', 'White', '#F5F5F7',
     '128GB', '8GB', 58800000, 61200000,
     49980000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -354,35 +374,39 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCnhMSBj-r1d_rG__Jqa8cjnApWRYRTihPMGHKWdNdZbXvyaJctP1Khen0nqBIUk3D8vkkpjEtlqQ8r1BUUjUCjJrwmV0md9GU-XjK0Qz-P0X76jAOFMg0WDTTWr16z6a5qHuWD99Hapr3S9q39z7R-WbaXNWw5rQAVxdLB8lTMS3f13NH8ZRRzJdLiDzCL8VxAvJ8jHyoRZtM_qX-DRHPLYDJbBUFodOS2vNGj_K1FqzWZaZmx9xpWyA', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCnhMSBj-r1d_rG__Jqa8cjnApWRYRTihPMGHKWdNdZbXvyaJctP1Khen0nqBIUk3D8vkkpjEtlqQ8r1BUUjUCjJrwmV0md9GU-XjK0Qz-P0X76jAOFMg0WDTTWr16z6a5qHuWD99Hapr3S9q39z7R-WbaXNWw5rQAVxdLB8lTMS3f13NH8ZRRzJdLiDzCL8VxAvJ8jHyoRZtM_qX-DRHPLYDJbBUFodOS2vNGj_K1FqzWZaZmx9xpWyA', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-APL-15-128-BLU', 'آبی روشن', 'Blue', '#D4E3EA',
+    v_prod_id, v_war_id, 'CNA-APL-15-128-BLU', 'CNA-APL-15-128-BLU', 'آبی روشن', 'Blue', '#D4E3EA',
     '128GB', '6GB', 51200000, 53500000,
     43520000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-APL-15-128-BLK', 'مشکی', 'Black', '#2D2E30',
+    v_prod_id, v_war_id, 'CNA-APL-15-128-BLK', 'CNA-APL-15-128-BLK', 'مشکی', 'Black', '#2D2E30',
     '128GB', '6GB', 50900000, 53000000,
     43265000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -415,47 +439,52 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-SAM-S24U-256-GRY', 'خاکستری تیتانیوم', 'Titanium Gray', '#68696E',
+    v_prod_id, v_war_id, 'CNA-SAM-S24U-256-GRY', 'CNA-SAM-S24U-256-GRY', 'خاکستری تیتانیوم', 'Titanium Gray', '#68696E',
     '256GB', '12GB', 72500000, 75000000,
     61625000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-SAM-S24U-256-VIO', 'بنفش تیتانیوم', 'Titanium Violet', '#4E4B5C',
+    v_prod_id, v_war_id, 'CNA-SAM-S24U-256-VIO', 'CNA-SAM-S24U-256-VIO', 'بنفش تیتانیوم', 'Titanium Violet', '#4E4B5C',
     '256GB', '12GB', 72200000, 74800000,
     61370000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-SAM-S24U-512-BLK', 'مشکی تیتانیوم', 'Titanium Black', '#2B2B2C',
+    v_prod_id, v_war_id, 'CNA-SAM-S24U-512-BLK', 'CNA-SAM-S24U-512-BLK', 'مشکی تیتانیوم', 'Titanium Black', '#2B2B2C',
     '512GB', '12GB', 81500000, 84500000,
     69275000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -488,35 +517,39 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-SAM-S24P-256-BLK', 'مشکی اونیکس', 'Onyx Black', '#222222',
+    v_prod_id, v_war_id, 'CNA-SAM-S24P-256-BLK', 'CNA-SAM-S24P-256-BLK', 'مشکی اونیکس', 'Onyx Black', '#222222',
     '256GB', '12GB', 55800000, 58000000,
     47430000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-SAM-S24P-256-GRY', 'خاکستری مرمرین', 'Marble Gray', '#B8B9B7',
+    v_prod_id, v_war_id, 'CNA-SAM-S24P-256-GRY', 'CNA-SAM-S24P-256-GRY', 'خاکستری مرمرین', 'Marble Gray', '#B8B9B7',
     '256GB', '12GB', 55500000, 57900000,
     47175000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -549,35 +582,39 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-SAM-S24-128-VIO', 'بنفش کبالت', 'Cobalt Violet', '#433D52',
+    v_prod_id, v_war_id, 'CNA-SAM-S24-128-VIO', 'CNA-SAM-S24-128-VIO', 'بنفش کبالت', 'Cobalt Violet', '#433D52',
     '128GB', '8GB', 44500000, 46500000,
     37825000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-SAM-S24-256-YEL', 'زرد کهربایی', 'Amber Yellow', '#F0E4B7',
+    v_prod_id, v_war_id, 'CNA-SAM-S24-256-YEL', 'CNA-SAM-S24-256-YEL', 'زرد کهربایی', 'Amber Yellow', '#F0E4B7',
     '256GB', '8GB', 48200000, 50500000,
     40970000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -610,35 +647,39 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-SAM-S23FE-256-GRP', 'گرافیتی', 'Graphite', '#363839',
+    v_prod_id, v_war_id, 'CNA-SAM-S23FE-256-GRP', 'CNA-SAM-S23FE-256-GRP', 'گرافیتی', 'Graphite', '#363839',
     '256GB', '8GB', 28400000, 30000000,
     24140000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-SAM-S23FE-256-MNT', 'نعنایی', 'Mint', '#C8E2D4',
+    v_prod_id, v_war_id, 'CNA-SAM-S23FE-256-MNT', 'CNA-SAM-S23FE-256-MNT', 'نعنایی', 'Mint', '#C8E2D4',
     '256GB', '8GB', 28600000, 30200000,
     24310000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -671,35 +712,39 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-SAM-A55-256-NAV', 'سرمه‌ای جذاب', 'Awesome Navy', '#232A36',
+    v_prod_id, v_war_id, 'CNA-SAM-A55-256-NAV', 'CNA-SAM-A55-256-NAV', 'سرمه‌ای جذاب', 'Awesome Navy', '#232A36',
     '256GB', '8GB', 21800000, 23200000,
     18530000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-SAM-A55-256-BLU', 'آبی یخی', 'Awesome Iceblue', '#D4E6F1',
+    v_prod_id, v_war_id, 'CNA-SAM-A55-256-BLU', 'CNA-SAM-A55-256-BLU', 'آبی یخی', 'Awesome Iceblue', '#D4E6F1',
     '256GB', '8GB', 21900000, 23300000,
     18615000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -732,35 +777,39 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuB3V1C5m8K0l7P2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuB3V1C5m8K0l7P2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-XMI-14U-512-BLK', 'مشکی چرم نانو', 'Black', '#212121',
+    v_prod_id, v_war_id, 'CNA-XMI-14U-512-BLK', 'CNA-XMI-14U-512-BLK', 'مشکی چرم نانو', 'Black', '#212121',
     '512GB', '16GB', 74900000, 78000000,
     63665000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-XMI-14U-512-WHT', 'سفید سرامیکی', 'White', '#F8F9FA',
+    v_prod_id, v_war_id, 'CNA-XMI-14U-512-WHT', 'CNA-XMI-14U-512-WHT', 'سفید سرامیکی', 'White', '#F8F9FA',
     '512GB', '16GB', 75200000, 78500000,
     63920000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -793,35 +842,39 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuB3V1C5m8K0l7P2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuB3V1C5m8K0l7P2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-XMI-14-512-GRN', 'سبز یشمی', 'Jade Green', '#556B2F',
+    v_prod_id, v_war_id, 'CNA-XMI-14-512-GRN', 'CNA-XMI-14-512-GRN', 'سبز یشمی', 'Jade Green', '#556B2F',
     '512GB', '12GB', 51500000, 54000000,
     43775000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-XMI-14-512-BLK', 'مشکی مات', 'Black', '#232323',
+    v_prod_id, v_war_id, 'CNA-XMI-14-512-BLK', 'CNA-XMI-14-512-BLK', 'مشکی مات', 'Black', '#232323',
     '512GB', '12GB', 51200000, 53800000,
     43520000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -854,35 +907,39 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuB3V1C5m8K0l7P2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuB3V1C5m8K0l7P2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-XMI-13TP-512-BLU', 'آبی آلپاین (چرم)', 'Alpine Blue', '#5A728E',
+    v_prod_id, v_war_id, 'CNA-XMI-13TP-512-BLU', 'CNA-XMI-13TP-512-BLU', 'آبی آلپاین (چرم)', 'Alpine Blue', '#5A728E',
     '512GB', '12GB', 34800000, 36900000,
     29580000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-XMI-13TP-512-BLK', 'مشکی شیشه‌ای', 'Black', '#1A1A1A',
+    v_prod_id, v_war_id, 'CNA-XMI-13TP-512-BLK', 'CNA-XMI-13TP-512-BLK', 'مشکی شیشه‌ای', 'Black', '#1A1A1A',
     '512GB', '12GB', 34500000, 36500000,
     29325000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -915,35 +972,39 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuB3V1C5m8K0l7P2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuB3V1C5m8K0l7P2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-XMI-F6P-512-BLK', 'مشکی کربنی', 'Black', '#1E1E1E',
+    v_prod_id, v_war_id, 'CNA-XMI-F6P-512-BLK', 'CNA-XMI-F6P-512-BLK', 'مشکی کربنی', 'Black', '#1E1E1E',
     '512GB', '12GB', 28900000, 30500000,
     24565000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-XMI-F6P-512-WHT', 'سفید ماهتابی', 'White', '#EAEAEA',
+    v_prod_id, v_war_id, 'CNA-XMI-F6P-512-WHT', 'CNA-XMI-F6P-512-WHT', 'سفید ماهتابی', 'White', '#EAEAEA',
     '512GB', '12GB', 29100000, 30800000,
     24735000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -976,35 +1037,39 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuB3V1C5m8K0l7P2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuB3V1C5m8K0l7P2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8P0w2X4z6B8n0M2', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-XMI-X6P-256-YEL', 'زرد اختصاصی پوکو', 'Poco Yellow', '#FFCE00',
+    v_prod_id, v_war_id, 'CNA-XMI-X6P-256-YEL', 'CNA-XMI-X6P-256-YEL', 'زرد اختصاصی پوکو', 'Poco Yellow', '#FFCE00',
     '256GB', '8GB', 18200000, 19500000,
     15470000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-XMI-X6P-256-GRY', 'خاکستری تیتانیومی', 'Gray', '#505050',
+    v_prod_id, v_war_id, 'CNA-XMI-X6P-256-GRY', 'CNA-XMI-X6P-256-GRY', 'خاکستری تیتانیومی', 'Gray', '#505050',
     '256GB', '8GB', 17950000, 19200000,
     15257500, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -1037,35 +1102,39 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-GGL-P9PXL-256-OBS', 'ابسیدین مشکی', 'Obsidian', '#1F2124',
+    v_prod_id, v_war_id, 'CNA-GGL-P9PXL-256-OBS', 'CNA-GGL-P9PXL-256-OBS', 'ابسیدین مشکی', 'Obsidian', '#1F2124',
     '256GB', '16GB', 77500000, 81000000,
     65875000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-GGL-P9PXL-256-PRC', 'سفید چینی', 'Porcelain', '#F5F4F0',
+    v_prod_id, v_war_id, 'CNA-GGL-P9PXL-256-PRC', 'CNA-GGL-P9PXL-256-PRC', 'سفید چینی', 'Porcelain', '#F5F4F0',
     '256GB', '16GB', 77800000, 81500000,
     66130000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -1098,35 +1167,39 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-GGL-P9-128-PEO', 'صورتی گل صدتومانی', 'Peony', '#ECA0B2',
+    v_prod_id, v_war_id, 'CNA-GGL-P9-128-PEO', 'CNA-GGL-P9-128-PEO', 'صورتی گل صدتومانی', 'Peony', '#ECA0B2',
     '128GB', '12GB', 56200000, 58500000,
     47770000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-GGL-P9-256-OBS', 'مشکی ابسیدین', 'Obsidian', '#1F2124',
+    v_prod_id, v_war_id, 'CNA-GGL-P9-256-OBS', 'CNA-GGL-P9-256-OBS', 'مشکی ابسیدین', 'Obsidian', '#1F2124',
     '256GB', '12GB', 61900000, 64500000,
     52615000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -1159,35 +1232,39 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFj_12J2d7vWd8_Kj8Q10i4B_W8aW9j6L5vK4bN2p1m0L8vQ4tW2y6U4o8P0w2X4z6B8n0M2q4T6v8X0z2A4c6E8g0I2k4M6o8', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-GGL-P8A-128-BAY', 'آبی خلیجی', 'Bay', '#8FB2DE',
+    v_prod_id, v_war_id, 'CNA-GGL-P8A-128-BAY', 'CNA-GGL-P8A-128-BAY', 'آبی خلیجی', 'Bay', '#8FB2DE',
     '128GB', '8GB', 31200000, 32900000,
     26520000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-GGL-P8A-128-OBS', 'مشکی ابسیدین', 'Obsidian', '#212121',
+    v_prod_id, v_war_id, 'CNA-GGL-P8A-128-OBS', 'CNA-GGL-P8A-128-OBS', 'مشکی ابسیدین', 'Obsidian', '#212121',
     '128GB', '8GB', 30900000, 32500000,
     26265000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -1220,23 +1297,26 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuD-1rZ2WbQ2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuD-1rZ2WbQ2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-ACC-AWU2-49', 'تیتانیوم طبیعی', 'Natural Titanium', '#8E8B82',
+    v_prod_id, v_war_id, 'CNA-ACC-AWU2-49', 'CNA-ACC-AWU2-49', 'تیتانیوم طبیعی', 'Natural Titanium', '#8E8B82',
     '64GB', 'استاندارد', 48500000, 51000000,
     41225000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -1269,23 +1349,26 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-ACC-APP2-TYPC', 'سفید براق', 'White', '#FFFFFF',
+    v_prod_id, v_war_id, 'CNA-ACC-APP2-TYPC', 'CNA-ACC-APP2-TYPC', 'سفید براق', 'White', '#FFFFFF',
     'استاندارد', 'استاندارد', 14200000, 15500000,
     12070000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -1318,23 +1401,26 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuD-1rZ2WbQ2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuD-1rZ2WbQ2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-ACC-GB2P-BLK', 'مشکی گرافیتی', 'Graphite', '#2C2D30',
+    v_prod_id, v_war_id, 'CNA-ACC-GB2P-BLK', 'CNA-ACC-GB2P-BLK', 'مشکی گرافیتی', 'Graphite', '#2C2D30',
     'استاندارد', 'استاندارد', 7450000, 8200000,
     6332500, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -1367,23 +1453,26 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-ACC-ANK-737', 'خاکستری تیره', 'Dark Gray', '#3A3D40',
+    v_prod_id, v_war_id, 'CNA-ACC-ANK-737', 'CNA-ACC-ANK-737', 'خاکستری تیره', 'Dark Gray', '#3A3D40',
     '24000mAh', '140W', 7950000, 8800000,
     6757500, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -1416,23 +1505,26 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-ACC-ANK-30W', 'سفید مات', 'White', '#F9F9F9',
+    v_prod_id, v_war_id, 'CNA-ACC-ANK-30W', 'CNA-ACC-ANK-30W', 'سفید مات', 'White', '#F9F9F9',
     '30W', 'GaN', 1650000, 1850000,
     1402500, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -1465,23 +1557,26 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-ACC-NIL-CPPRO', 'شفاف با حاشیه مشکی', 'Clear Black Edge', '#000000',
+    v_prod_id, v_war_id, 'CNA-ACC-NIL-CPPRO', 'CNA-ACC-NIL-CPPRO', 'شفاف با حاشیه مشکی', 'Clear Black Edge', '#000000',
     'استاندارد', 'استاندارد', 680000, 790000,
     578000, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -1514,23 +1609,26 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-ACC-APL-MSCASE', 'شفاف کریستالی', 'Clear', '#FFFFFF',
+    v_prod_id, v_war_id, 'CNA-ACC-APL-MSCASE', 'CNA-ACC-APL-MSCASE', 'شفاف کریستالی', 'Clear', '#FFFFFF',
     'استاندارد', 'استاندارد', 3850000, 4200000,
     3272500, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -1563,23 +1661,26 @@ BEGIN
     badge = EXCLUDED.badge
   RETURNING id INTO v_prod_id;
 
-  -- Images
-  DELETE FROM public.product_images WHERE product_id = v_prod_id;
+  -- Images (Non-destructive UPSERT using unique index uq_product_images_product_url)
 
   INSERT INTO public.product_images (product_id, image_url, is_cover, sort_order)
-  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4', true, 0);
+  VALUES (v_prod_id, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCQy2c_GgBv6wT2dE8jK6m0P4s8U2x6A8c0E2g4I6k8M0o2Q4s6U8w0Y2a4C6e8G0i2K4m6O8q0S2u4W6y8A0c2E4g6I8k0M2q4', true, 0)
+  ON CONFLICT (product_id, image_url) DO UPDATE SET
+    is_cover = EXCLUDED.is_cover,
+    sort_order = EXCLUDED.sort_order;
 
   -- Variants
   INSERT INTO public.product_variants (
-    product_id, warranty_id, sku, color_name_fa, color_name_en, color_hex,
+    product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
     storage, ram, price_toman, original_price_toman, cost_price_toman, is_published
   )
   VALUES (
-    v_prod_id, v_war_id, 'CNA-ACC-ANK-QI2PB', 'مشکی مات', 'Black', '#232528',
+    v_prod_id, v_war_id, 'CNA-ACC-ANK-QI2PB', 'CNA-ACC-ANK-QI2PB', 'مشکی مات', 'Black', '#232528',
     '10000mAh', '15W Qi2', 4650000, 5100000,
     3952500, true
   )
   ON CONFLICT (sku) DO UPDATE SET
+    part_number = EXCLUDED.part_number,
     price_toman = EXCLUDED.price_toman,
     original_price_toman = EXCLUDED.original_price_toman;
 END $$;
@@ -1592,7 +1693,8 @@ DECLARE
   v_wh_id UUID;
   v_wh_count INT;
   v_expected_sku_count INT := 46;
-  v_matched_sku_count INT;
+  v_missing_skus TEXT;
+  v_duplicate_skus TEXT;
   v_existing_ws public.warehouse_stock%ROWTYPE;
   v_existing_sm public.stock_movements%ROWTYPE;
   v_global_sm public.stock_movements%ROWTYPE;
@@ -1670,14 +1772,27 @@ BEGIN
     ('CNA-ACC-APL-MSCASE', 9, 'ACC-07'),
     ('CNA-ACC-ANK-QI2PB', 7, 'ACC-08');
 
-  -- 3. Verify All Expected SKUs Exist in product_variants
-  SELECT COUNT(*) INTO v_matched_sku_count
+  -- 3. Invariant Validations: Separate Missing SKUs and Duplicate SKUs Checks
+  -- 3.1 Check for Missing SKUs
+  SELECT string_agg(s.sku, ', ') INTO v_missing_skus
   FROM temp_opening_seed s
-  JOIN public.product_variants pv ON s.sku = pv.sku;
+  WHERE NOT EXISTS (
+    SELECT 1 FROM public.product_variants pv WHERE pv.sku = s.sku
+  );
 
-  IF v_matched_sku_count <> v_expected_sku_count THEN
-    RAISE EXCEPTION 'خطای انطباق کاتالوگ: از % تنوع مورد انتظار، فقط % تنوع در جدول product_variants یافت شد.',
-      v_expected_sku_count, v_matched_sku_count;
+  IF v_missing_skus IS NOT NULL THEN
+    RAISE EXCEPTION 'خطای انطباق کاتالوگ: تنوع‌های زیر در جدول product_variants یافت نشدند: %', v_missing_skus;
+  END IF;
+
+  -- 3.2 Check for Duplicate SKUs in product_variants
+  SELECT string_agg(s.sku, ', ') INTO v_duplicate_skus
+  FROM temp_opening_seed s
+  JOIN public.product_variants pv ON s.sku = pv.sku
+  GROUP BY s.sku
+  HAVING COUNT(pv.id) > 1;
+
+  IF v_duplicate_skus IS NOT NULL THEN
+    RAISE EXCEPTION 'خطای انطباق کاتالوگ: تنوع‌های زیر بیش از یک بار در جدول product_variants ثبت شده‌اند: %', v_duplicate_skus;
   END IF;
 
   -- 4. Safe Fail-Fast Processing & Full Ledger Reconciliation for Every SKU
