@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS public.auth_user_roles (
 );
 
 -- 5. Authoritative Security Definer RBAC Helper Functions
-CREATE OR REPLACE FUNCTION auth.user_has_role(required_role TEXT)
+CREATE OR REPLACE FUNCTION public.user_has_role(required_role TEXT)
 RETURNS BOOLEAN
 SECURITY DEFINER
 SET search_path = ''
@@ -74,9 +74,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-ALTER FUNCTION auth.user_has_role(text) OWNER TO postgres;
+ALTER FUNCTION public.user_has_role(text) OWNER TO postgres;
 
-CREATE OR REPLACE FUNCTION auth.user_has_permission(required_perm TEXT)
+CREATE OR REPLACE FUNCTION public.user_has_permission(required_perm TEXT)
 RETURNS BOOLEAN
 SECURITY DEFINER
 SET search_path = ''
@@ -93,17 +93,17 @@ BEGIN
   END IF;
 
   -- Super admin has all permissions
-  IF auth.user_has_role('super_admin') THEN
+  IF public.user_has_role('super_admin') THEN
     RETURN TRUE;
   END IF;
 
   -- Catalog Manager permissions
-  IF auth.user_has_role('catalog_manager') AND required_perm IN ('catalog:read', 'catalog:manage', 'products:write') THEN
+  IF public.user_has_role('catalog_manager') AND required_perm IN ('catalog:read', 'catalog:manage', 'products:write') THEN
     RETURN TRUE;
   END IF;
 
   -- Warehouse Manager permissions
-  IF auth.user_has_role('warehouse_manager') AND required_perm IN ('catalog:read', 'inventory:read', 'inventory:manage') THEN
+  IF public.user_has_role('warehouse_manager') AND required_perm IN ('catalog:read', 'inventory:read', 'inventory:manage') THEN
     RETURN TRUE;
   END IF;
 
@@ -116,14 +116,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-ALTER FUNCTION auth.user_has_permission(text) OWNER TO postgres;
+ALTER FUNCTION public.user_has_permission(text) OWNER TO postgres;
 
 -- 6. Function Grants and Revokes
-REVOKE ALL ON FUNCTION auth.user_has_role(text) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION auth.user_has_role(text) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.user_has_role(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.user_has_role(text) TO authenticated, service_role;
 
-REVOKE ALL ON FUNCTION auth.user_has_permission(text) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION auth.user_has_permission(text) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.user_has_permission(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.user_has_permission(text) TO authenticated, service_role;
 
 -- 7. Table Privileges & RLS Configuration
 REVOKE ALL ON TABLE public.auth_roles FROM PUBLIC, anon;
@@ -140,7 +140,7 @@ GRANT ALL ON TABLE public.profiles TO service_role;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users Read Own Profile" ON public.profiles FOR SELECT TO authenticated USING (id = auth.uid());
 CREATE POLICY "Users Update Own Profile" ON public.profiles FOR UPDATE TO authenticated USING (id = auth.uid());
-CREATE POLICY "Admins Read All Profiles" ON public.profiles FOR SELECT TO authenticated USING (auth.user_has_role('super_admin'));
+CREATE POLICY "Admins Read All Profiles" ON public.profiles FOR SELECT TO authenticated USING (public.user_has_role('super_admin'));
 
 REVOKE ALL ON TABLE public.auth_user_roles FROM PUBLIC, anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.auth_user_roles TO authenticated;
@@ -148,5 +148,5 @@ GRANT ALL ON TABLE public.auth_user_roles TO service_role;
 
 ALTER TABLE public.auth_user_roles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Super Admins Manage User Roles" ON public.auth_user_roles FOR ALL TO authenticated
-USING (auth.user_has_role('super_admin')) WITH CHECK (auth.user_has_role('super_admin'));
+USING (public.user_has_role('super_admin')) WITH CHECK (public.user_has_role('super_admin'));
 CREATE POLICY "Users Read Own Roles" ON public.auth_user_roles FOR SELECT TO authenticated USING (user_id = auth.uid());

@@ -11,7 +11,7 @@
 1. `migrations/20261107000001_core_identity_rbac.sql`
    - اکستنشن‌های اصلی (`pgcrypto`, `uuid-ossp`, `pg_trgm`).
    - جداول هویت و نقش‌ها (`auth_roles`, `profiles`, `auth_user_roles`).
-   - توابع امنیتی RBAC: `auth.user_has_role(text)` و `auth.user_has_permission(text)` با مالکیت `postgres` و لغو دسترسی از `anon`.
+   - توابع امنیتی RBAC: `public.user_has_role(text)` و `public.user_has_permission(text)` با مالکیت `postgres` و لغو دسترسی از `anon`.
    - سیاست‌های امنیت سطری (RLS) مدیریت نقش‌ها.
 
 2. `migrations/20261107000002_catalog_schema.sql`

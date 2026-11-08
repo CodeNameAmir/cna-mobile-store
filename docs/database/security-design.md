@@ -29,7 +29,7 @@
 
 ```sql
 -- ۱. تابع اعتبارسنجی نقش کاربر با مسیر امن
-CREATE OR REPLACE FUNCTION auth.user_has_role(required_role TEXT)
+CREATE OR REPLACE FUNCTION public.user_has_role(required_role TEXT)
 RETURNS BOOLEAN
 SECURITY DEFINER
 SET search_path = public, pg_temp
@@ -47,7 +47,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ۲. تابع بررسی داشتن مجوز دانه‌ای کاربر با مسیر امن
-CREATE OR REPLACE FUNCTION auth.user_has_permission(required_perm TEXT)
+CREATE OR REPLACE FUNCTION public.user_has_permission(required_perm TEXT)
 RETURNS BOOLEAN
 SECURITY DEFINER
 SET search_path = public, pg_temp
@@ -66,11 +66,11 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- محدودسازی اجرای توابع بررسی مجوز
-REVOKE EXECUTE ON FUNCTION auth.user_has_role(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth.user_has_role(TEXT) TO authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.user_has_role(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.user_has_role(TEXT) TO authenticated, service_role;
 
-REVOKE EXECUTE ON FUNCTION auth.user_has_permission(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth.user_has_permission(TEXT) TO authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.user_has_permission(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.user_has_permission(TEXT) TO authenticated, service_role;
 ```
 
 ---
@@ -98,9 +98,9 @@ GRANT EXECUTE ON FUNCTION auth.user_has_permission(TEXT) TO authenticated, servi
 #### جداول `auth_roles`, `auth_permissions`, `auth_user_roles`, `auth_role_permissions`
 - **SELECT:**
   - کاربران احراز هویت شده: فقط مشاهده نقش‌های تخصیص‌یافته به خود.
-  - مدیر ارشد: مشاهده تمام نقش‌ها و مجوزها (`auth.user_has_role('super_admin')`).
+  - مدیر ارشد: مشاهده تمام نقش‌ها و مجوزها (`public.user_has_role('super_admin')`).
 - **INSERT / UPDATE / DELETE:**
-  - منحصراً مدیر ارشد (`auth.user_has_role('super_admin')`).
+  - منحصراً مدیر ارشد (`public.user_has_role('super_admin')`).
 
 ---
 
@@ -192,7 +192,7 @@ GRANT EXECUTE ON FUNCTION auth.user_has_permission(TEXT) TO authenticated, servi
   `ALTER TABLE payment_refund_attempts ENABLE ROW LEVEL SECURITY;`
 - **SELECT:**
   - مشتریان عادی (`authenticated`, `anon`): **کاملاً مسدود (DENIED).** هیچ مشتری دسترسی مستقیمی به سوابق لاگ داخلی تلاش‌های وب‌سرویس درگاه، پی‌لودهای بانکی و خطاهای درگاه ندارد.
-  - مدیران مالی و حسابرسی: مشاهده سوابق منحصراً با داشتن مجوز `finance:read` یا `finance:manage` (`auth.user_has_permission('finance:read') OR auth.user_has_permission('finance:manage')`).
+  - مدیران مالی و حسابرسی: مشاهده سوابق منحصراً با داشتن مجوز `finance:read` یا `finance:manage` (`public.user_has_permission('finance:read') OR public.user_has_permission('finance:manage')`).
 - **INSERT / UPDATE / DELETE برای کلاینت:**
   - **کاملاً مسدود و ممنوع (DENIED).** هیچ کاربر احراز هویت شده‌ای (`authenticated`) اجازه درج، ویرایش یا حذف مستقیم سطرهای تلاش استرداد را ندارد.
 - **تغییرات سروری و مسیرهای مجاز:**
@@ -208,7 +208,7 @@ GRANT EXECUTE ON FUNCTION auth.user_has_permission(TEXT) TO authenticated, servi
   -- سیاست خواندن صرفاً برای مدیران مالی مجاز
   CREATE POLICY p_refund_attempts_select_finance ON payment_refund_attempts
       FOR SELECT TO authenticated
-      USING (auth.user_has_permission('finance:read') OR auth.user_has_permission('finance:manage'));
+      USING (public.user_has_permission('finance:read') OR public.user_has_permission('finance:manage'));
 
   -- سایر عملیات‌ها بدون تعریف سیاست باز بوده و در نتیجه به صورت پیش‌فرض DENY ALL هستند
   ```
@@ -267,7 +267,7 @@ BEGIN
             RAISE EXCEPTION 'سفارش مرجع معتبر نمی‌باشد.';
         END IF;
 
-        IF NOT v_is_service_role AND NOT auth.user_has_permission('finance:manage') THEN
+        IF NOT v_is_service_role AND NOT public.user_has_permission('finance:manage') THEN
             IF v_order.user_id <> v_caller_id THEN
                 RAISE EXCEPTION 'دسترسی غیرمجاز: سفارش مرجع متعلق به کاربر جاری نیست.';
             END IF;
@@ -322,7 +322,7 @@ BEGIN
     -- ۴. سیاست سخت‌گیرانه مجاز بودن عملیات بر اساس نقش فراخواننده
     IF v_is_service_role THEN
         NULL; -- سرویس‌های پس‌زمینه امن (وب‌هوک بانکی / استرداد سیستمی)
-    ELSIF auth.user_has_permission('finance:manage') THEN
+    ELSIF public.user_has_permission('finance:manage') THEN
         NULL; -- مدیر مالی مجاز
     ELSE
         -- کاربر عادی احراز هویت شده (مشتری):
@@ -418,7 +418,7 @@ DECLARE
     v_movement_id UUID;
 BEGIN
     -- ۱. بررسی مجوز پرسنل انبارداری
-    IF NOT auth.user_has_permission('inventory:manage') AND 
+    IF NOT public.user_has_permission('inventory:manage') AND
        COALESCE(current_setting('request.jwt.claim.role', true), '') <> 'service_role' THEN
         RAISE EXCEPTION 'دسترسی غیرمجاز برای تغییر اسناد انبار.';
     END IF;
@@ -538,7 +538,7 @@ DECLARE
 BEGIN
     -- ۱. اعتبارسنجی سطح دسترسی سروری (Server-Only Authorization)
     IF NOT v_is_service_role AND 
-       NOT (auth.user_has_permission('finance:manage') AND auth.user_has_permission('orders:manage')) THEN
+       NOT (public.user_has_permission('finance:manage') AND public.user_has_permission('orders:manage')) THEN
         RAISE EXCEPTION 'دسترسی غیرمجاز: این تابع صرفاً توسط سرویس‌های امن پشتیبان قابل فراخوانی است.';
     END IF;
 
@@ -804,7 +804,7 @@ BEGIN
     END IF;
 
     -- ۲. کنترل سطح دسترسی سروری و مرز اعتماد (Server-Only Trust Boundary)
-    IF NOT v_is_service_role AND NOT auth.user_has_permission('finance:manage') THEN
+    IF NOT v_is_service_role AND NOT public.user_has_permission('finance:manage') THEN
         RAISE EXCEPTION 'دسترسی غیرمجاز: اجرای فرآیند رزرو و آغاز استرداد منحصراً توسط سرویس سروری مورد اعتماد (service_role) یا مدیر ارشد مالی مجاز است.';
     END IF;
 
@@ -1082,7 +1082,7 @@ DECLARE
     v_note TEXT;
 BEGIN
     -- ۱. کنترل سطح دسترسی سروری و مرز اعتماد
-    IF NOT v_is_service_role AND NOT auth.user_has_permission('finance:manage') THEN
+    IF NOT v_is_service_role AND NOT public.user_has_permission('finance:manage') THEN
         RAISE EXCEPTION 'دسترسی غیرمجاز: نهایی‌سازی استرداد منحصراً توسط service_role یا مدیر مالی مجاز است.';
     END IF;
 

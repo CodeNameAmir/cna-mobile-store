@@ -114,7 +114,7 @@ DECLARE
   v_operator_id UUID := auth.uid();
 BEGIN
   -- 1. Explicit Caller Authorization Check
-  IF NOT auth.user_has_permission('inventory:manage') AND NOT auth.user_has_role('super_admin') THEN
+  IF NOT public.user_has_permission('inventory:manage') AND NOT public.user_has_role('super_admin') THEN
     RAISE EXCEPTION 'دسترسی غیرمجاز: ثبت اسناد گردش انبارداری منحصراً در صلاحیت پرسنل مجاز انبار یا حساب سیستمی است.';
   END IF;
 
@@ -301,4 +301,4 @@ ALTER TABLE public.stock_movements ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public Read Active Warehouses" ON public.warehouses FOR SELECT TO public USING (is_active = true);
 CREATE POLICY "Public Read Stock Projections" ON public.warehouse_stock FOR SELECT TO public USING (true);
 CREATE POLICY "Warehouse Managers Read Movements" ON public.stock_movements FOR SELECT TO authenticated
-USING (auth.user_has_permission('inventory:read') OR auth.user_has_role('super_admin'));
+USING (public.user_has_permission('inventory:read') OR public.user_has_role('super_admin'));

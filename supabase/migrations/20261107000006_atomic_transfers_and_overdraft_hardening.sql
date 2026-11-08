@@ -37,7 +37,7 @@ DECLARE
   v_operator_id UUID := auth.uid();
 BEGIN
   -- 1. Explicit Caller Authorization Check
-  IF NOT auth.user_has_permission('inventory:manage') AND NOT auth.user_has_role('super_admin') THEN
+  IF NOT public.user_has_permission('inventory:manage') AND NOT public.user_has_role('super_admin') THEN
     RAISE EXCEPTION 'دسترسی غیرمجاز: ثبت اسناد گردش انبارداری منحصراً در صلاحیت پرسنل مجاز انبار یا حساب سیستمی است.'
       USING ERRCODE = '42501'; -- insufficient_privilege
   END IF;
@@ -264,7 +264,7 @@ DECLARE
   v_in_movement_id UUID;
 BEGIN
   -- 1. Explicit Caller Authorization Check
-  IF NOT auth.user_has_permission('inventory:manage') AND NOT auth.user_has_role('super_admin') THEN
+  IF NOT public.user_has_permission('inventory:manage') AND NOT public.user_has_role('super_admin') THEN
     RAISE EXCEPTION 'دسترسی غیرمجاز: عملیات انتقال کالا میان انبارها منحصراً در صلاحیت پرسنل مجاز انبار یا مدیر سیستم است.'
       USING ERRCODE = '42501';
   END IF;

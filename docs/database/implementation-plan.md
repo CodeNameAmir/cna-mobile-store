@@ -14,7 +14,7 @@
 │   - اکستنشن‌های اصلی: pgcrypto, uuid-ossp, pg_trgm                     │
 │   - جداول احراز هویت: auth_roles, auth_permissions,                    │
 │     auth_role_permissions, profiles, auth_user_roles, user_addresses  │
-│   - توابع امنیتی RBAC: auth.user_has_role(), auth.user_has_permission()│
+│   - توابع امنیتی RBAC: public.user_has_role(), public.user_has_permission()│
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
                                     ▼

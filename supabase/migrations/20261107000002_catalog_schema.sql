@@ -176,16 +176,16 @@ USING (EXISTS (SELECT 1 FROM public.products p WHERE p.id = product_id AND p.is_
 
 -- Administrative DML Policies (Enforces catalog:manage permission for writes)
 CREATE POLICY "Catalog Managers Manage Products" ON public.products FOR ALL TO authenticated
-USING (auth.user_has_permission('catalog:manage')) WITH CHECK (auth.user_has_permission('catalog:manage'));
+USING (public.user_has_permission('catalog:manage')) WITH CHECK (public.user_has_permission('catalog:manage'));
 
 CREATE POLICY "Catalog Managers Manage Variants" ON public.product_variants FOR ALL TO authenticated
-USING (auth.user_has_permission('catalog:manage')) WITH CHECK (auth.user_has_permission('catalog:manage'));
+USING (public.user_has_permission('catalog:manage')) WITH CHECK (public.user_has_permission('catalog:manage'));
 
 CREATE POLICY "Catalog Managers Manage Images" ON public.product_images FOR ALL TO authenticated
-USING (auth.user_has_permission('catalog:manage')) WITH CHECK (auth.user_has_permission('catalog:manage'));
+USING (public.user_has_permission('catalog:manage')) WITH CHECK (public.user_has_permission('catalog:manage'));
 
 CREATE POLICY "Catalog Managers Manage Categories" ON public.categories FOR ALL TO authenticated
-USING (auth.user_has_permission('catalog:manage')) WITH CHECK (auth.user_has_permission('catalog:manage'));
+USING (public.user_has_permission('catalog:manage')) WITH CHECK (public.user_has_permission('catalog:manage'));
 
 CREATE POLICY "Catalog Managers Manage Brands" ON public.brands FOR ALL TO authenticated
-USING (auth.user_has_permission('catalog:manage')) WITH CHECK (auth.user_has_permission('catalog:manage'));
+USING (public.user_has_permission('catalog:manage')) WITH CHECK (public.user_has_permission('catalog:manage'));

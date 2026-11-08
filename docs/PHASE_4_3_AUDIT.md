@@ -77,7 +77,7 @@ Based on the Phase 4.2 data dictionary (`docs/database/entities-and-fields.md`) 
   3. **Table DML Restrictions**: `anon` has zero write permissions. `authenticated` ordinary customers have zero write permissions on catalog and inventory.
   4. **Ledger Immutability**: `stock_movements` rejects direct `UPDATE` and `DELETE` through PostgreSQL rules or triggers.
   5. **Function Grants**:
-     - `auth.user_has_role(text)` and `auth.user_has_permission(text)` are `SECURITY DEFINER` owned by `postgres`. `EXECUTE` is granted strictly to `authenticated, service_role` and explicitly revoked from `PUBLIC, anon`.
+     - `public.user_has_role(text)` and `public.user_has_permission(text)` are `SECURITY DEFINER` owned by `postgres`. `EXECUTE` is granted strictly to `authenticated, service_role` and explicitly revoked from `PUBLIC, anon`.
      - `public.rpc_record_stock_movement` is `SECURITY DEFINER` owned by `postgres`, granted to `authenticated, service_role`, and revoked from `PUBLIC, anon`.
 
 ---
@@ -125,7 +125,7 @@ The migrations will be structured in four sequential, forward-only files:
 1. `supabase/migrations/20261107000001_core_identity_rbac.sql`
    - Extensions (`pgcrypto`, `pg_trgm`).
    - Tables: `auth_roles`, `profiles`, `auth_user_roles`.
-   - Functions: `auth.user_has_role(text)`, `auth.user_has_permission(text)`.
+   - Functions: `public.user_has_role(text)`, `public.user_has_permission(text)`.
    - Privileges, ownership (`postgres`), and RLS policies.
 2. `supabase/migrations/20261107000002_catalog_schema.sql`
    - Tables: `categories`, `brands`, `warranties`, `attribute_definitions`, `category_attributes`, `products`, `product_images`, `product_variants`, `product_attribute_values`.

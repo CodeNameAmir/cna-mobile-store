@@ -199,19 +199,19 @@ CREATE POLICY "Catalog Managers Upload Product Images"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'product-images' AND
-  (auth.user_has_permission('catalog:manage') OR auth.user_has_role('super_admin'))
+  (public.user_has_permission('catalog:manage') OR public.user_has_role('super_admin'))
 );
 
 CREATE POLICY "Catalog Managers Modify Product Images"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'product-images' AND
-  (auth.user_has_permission('catalog:manage') OR auth.user_has_role('super_admin'))
+  (public.user_has_permission('catalog:manage') OR public.user_has_role('super_admin'))
 );
 
 CREATE POLICY "Catalog Managers Delete Product Images"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'product-images' AND
-  (auth.user_has_permission('catalog:manage') OR auth.user_has_role('super_admin'))
+  (public.user_has_permission('catalog:manage') OR public.user_has_role('super_admin'))
 );

@@ -6,7 +6,7 @@
 --           1. Column-level GRANTs (cost_price_toman)
 --           2. Table-level GRANTs (warehouse_stock)
 --           3. Row Level Security (RLS) policies
---           4. SECURITY DEFINER function authorization (auth.user_has_permission)
+--           4. SECURITY DEFINER function authorization (public.user_has_permission)
 -- Non-Destructive: Wrapped in BEGIN ... ROLLBACK
 -- ==============================================================================
 

@@ -60,7 +60,7 @@ CREATE POLICY "Warehouse Managers Read Stock Projections"
 ON public.warehouse_stock
 FOR SELECT
 TO authenticated
-USING (auth.user_has_permission('inventory:read') OR auth.user_has_role('super_admin'));
+USING (public.user_has_permission('inventory:read') OR public.user_has_role('super_admin'));
 
 -- ==============================================================================
 -- 5. Hardened Storefront Aggregation View
@@ -266,7 +266,7 @@ DECLARE
   v_operator_id UUID := auth.uid();
 BEGIN
   -- 1. Explicit Caller Authorization Check
-  IF NOT auth.user_has_permission('inventory:manage') AND NOT auth.user_has_role('super_admin') THEN
+  IF NOT public.user_has_permission('inventory:manage') AND NOT public.user_has_role('super_admin') THEN
     RAISE EXCEPTION 'دسترسی غیرمجاز: ثبت اسناد گردش انبارداری منحصراً در صلاحیت پرسنل مجاز انبار یا حساب سیستمی است.';
   END IF;
 
