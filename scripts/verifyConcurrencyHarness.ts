@@ -9,13 +9,20 @@
  *   5. Single-movement idempotency (cached duplicate recognition)
  *   6. Shelf-location conflict rejection (ERRCODE 23505)
  *   7. Full inventory ledger reconciliation (quantity_on_hand = SUM(quantity_change) via FULL OUTER JOIN)
- *   8. PostgreSQL Role, JWT Context, and RLS Verification across anon, customer, manager, and service_role
+ *   8. Explicit Dual-Assertion Authorization (Manager permitted vs Customer denied, zero side-effects)
+ *   9. PostgreSQL Role, JWT Context, and RLS Verification across anon, customer, manager, and service_role
  *
- * Rules:
- *   - Strictly isolated to dedicated test entities:
- *     * Warehouses: WH-TEST-CONCURRENCY-SRC, WH-TEST-CONCURRENCY-DST
- *     * Product: cna-test-concurrency-prod
- *     * Variant: CNA-TEST-CONCURRENCY
+ * Strict Isolation & Safety Rules:
+ *   - Zero fixed test-user UUIDs: dynamically generated unique UUIDs per run
+ *   - Zero risk of privilege escalation: warehouse_manager role attached ONLY to fresh, newly created test accounts
+ *   - Fail-closed identity provisioning: aborts immediately if user provisioning cannot be guaranteed safe
+ *   - Strictly isolated test fixtures with run-specific identifiers satisfying database column constraints:
+ *     * Warehouses: W_<token>_SRC, W_<token>_DST (code <= 20 chars)
+ *     * Product: cna-test-<token>-prod (slug <= 150 chars)
+ *     * Variants: CNA-VAR-<token>, CNA-RED-<token>, CNA-AUT-<token> (sku <= 100 chars)
+ *   - Zero ON CONFLICT DO UPDATE mutations on existing records
+ *   - Structured Fixture Registry tracking every provisioned entity
+ *   - Safe cleanup strategy deleting exclusively run-owned identities, while respecting immutable-ledger constraints
  *   - Zero direct mutations on warehouse_stock (all inventory created via authoritative ledger RPCs)
  *   - Production seed data (WH-CENTRAL, 26 products, 46 SKUs, 296 units) remains completely untouched
  *
@@ -24,6 +31,7 @@
  */
 
 import { Client } from 'pg';
+import crypto from 'crypto';
 
 interface AuthContext {
   role: 'anon' | 'authenticated' | 'service_role';
@@ -31,10 +39,18 @@ interface AuthContext {
   email?: string;
 }
 
-const ALLOWED_DATABASE_ROLES = new Set<string>(['anon', 'authenticated', 'service_role']);
+interface FixtureRegistry {
+  runId: string;
+  runToken: string;
+  warehouses: { id: string; code: string }[];
+  products: { id: string; slug: string }[];
+  variants: { id: string; sku: string }[];
+  users: { id: string; email: string; createdInAuth: boolean }[];
+  profiles: { id: string }[];
+  userRoles: { userId: string; roleId: string }[];
+}
 
-const TEST_MANAGER_ID = '00000000-0000-0000-0000-0000000000aa';
-const TEST_CUSTOMER_ID = '00000000-0000-0000-0000-0000000000bb';
+const ALLOWED_DATABASE_ROLES = new Set<string>(['anon', 'authenticated', 'service_role']);
 
 /**
  * Executes a callback within a transaction initialized with simulated PostgREST JWT context.
@@ -100,6 +116,96 @@ async function executeTx<T>(
   }
 }
 
+/**
+ * Safely cleans up harness test fixtures.
+ *
+ * Cleanup Rules:
+ * 1. Only deletes entities explicitly tracked in the fixture registry as created by the current run.
+ * 2. Deletes user roles, profiles, and auth.users records in strict reverse foreign-key order.
+ * 3. Respects immutable ledger constraints: stock_movements records are protected by database trigger
+ *    (trg_prevent_stock_movement_update_delete) and cannot be deleted. Consequently, warehouses and
+ *    variants referenced by stock_movements are protected by ON DELETE RESTRICT foreign keys.
+ *    These ledger-associated records are safely preserved with their unique run namespace and will
+ *    never be reused.
+ * 4. Never touches production entities or fixtures created by other runs.
+ */
+async function cleanupHarnessFixtures(client: Client, registry: FixtureRegistry) {
+  console.log(`\n[Cleanup] Starting safe cleanup for Run ID: ${registry.runId}...`);
+
+  // 1. Clean up user role assignments created by this run
+  for (const ur of registry.userRoles) {
+    try {
+      await client.query(
+        'DELETE FROM public.auth_user_roles WHERE user_id = $1::uuid AND role_id = $2::uuid;',
+        [ur.userId, ur.roleId]
+      );
+      console.log(`[Cleanup] Deleted test role assignment for user: ${ur.userId}`);
+    } catch (err) {
+      console.warn(`[Cleanup] Warning: Failed to delete auth_user_role for ${ur.userId}:`, (err as Error).message);
+    }
+  }
+
+  // 2. Clean up profiles created by this run
+  for (const p of registry.profiles) {
+    try {
+      await client.query('DELETE FROM public.profiles WHERE id = $1::uuid;', [p.id]);
+      console.log(`[Cleanup] Deleted test profile: ${p.id}`);
+    } catch (err) {
+      console.warn(`[Cleanup] Warning: Failed to delete profile ${p.id}:`, (err as Error).message);
+    }
+  }
+
+  // 3. Clean up auth.users created by this run
+  for (const u of registry.users) {
+    if (u.createdInAuth) {
+      try {
+        await client.query('DELETE FROM auth.users WHERE id = $1::uuid;', [u.id]);
+        console.log(`[Cleanup] Deleted test auth.users identity: ${u.id}`);
+      } catch (err) {
+        console.warn(`[Cleanup] Warning: Failed to delete auth.users ${u.id}:`, (err as Error).message);
+      }
+    }
+  }
+
+  // 4. If no ledger movements were recorded for the run's warehouses (e.g. failure prior to Test 1),
+  // safe cleanup of catalog and warehouse fixtures is permitted.
+  try {
+    const whIds = registry.warehouses.map((w) => w.id);
+    if (whIds.length > 0) {
+      const { rows: movCheck } = await client.query(
+        `SELECT COUNT(*) AS count FROM public.stock_movements WHERE warehouse_id = ANY($1::uuid[]);`,
+        [whIds]
+      );
+      const movCount = parseInt(movCheck[0].count, 10);
+
+      if (movCount === 0) {
+        // Zero movements recorded: safe to clean up catalog fixtures
+        for (const v of registry.variants) {
+          await client.query('DELETE FROM public.warehouse_stock WHERE variant_id = $1::uuid;', [v.id]);
+          await client.query('DELETE FROM public.product_variants WHERE id = $1::uuid;', [v.id]);
+        }
+        for (const p of registry.products) {
+          await client.query('DELETE FROM public.products WHERE id = $1::uuid;', [p.id]);
+        }
+        for (const w of registry.warehouses) {
+          await client.query('DELETE FROM public.warehouses WHERE id = $1::uuid;', [w.id]);
+        }
+        console.log('[Cleanup] Unused catalog fixtures safely removed (zero ledger movements existed).');
+      } else {
+        console.log(
+          `[Cleanup] Ledger Notice: ${movCount} immutable stock movements exist for this run. ` +
+          `By design (trg_prevent_stock_movement_update_delete & ON DELETE RESTRICT), ` +
+          `these records and their parent warehouses/variants are preserved under unique namespace '${registry.runToken}' and will never be reused.`
+        );
+      }
+    }
+  } catch (err) {
+    console.warn('[Cleanup] Catalog cleanup evaluation notice:', (err as Error).message);
+  }
+
+  console.log('[Cleanup] Safe cleanup sequence completed.');
+}
+
 async function runConcurrencyHarness() {
   const dbUrl = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
 
@@ -118,72 +224,204 @@ async function runConcurrencyHarness() {
   const client1 = new Client({ connectionString: dbUrl });
   const client2 = new Client({ connectionString: dbUrl });
 
+  // Generate unique run tokens satisfying database column length limits
+  // warehouses.code: VARCHAR(20) -> W_<8 hex>_SRC (14 chars <= 20)
+  // products.slug: VARCHAR(150) -> cna-test-<8 hex>-prod (22 chars <= 150)
+  // product_variants.sku: VARCHAR(100) -> CNA-VAR-<8 hex> (16 chars <= 100)
+  const runToken = crypto.randomBytes(4).toString('hex'); // 8 hex characters
+  const runId = `h${Date.now().toString(36)}_${runToken}`;
+
+  const registry: FixtureRegistry = {
+    runId,
+    runToken,
+    warehouses: [],
+    products: [],
+    variants: [],
+    users: [],
+    profiles: [],
+    userRoles: [],
+  };
+
   try {
     console.log('[Concurrency Harness] Connecting two independent PostgreSQL clients...');
     await Promise.all([client1.connect(), client2.connect()]);
     console.log('[Concurrency Harness] Both client connections established successfully.');
 
-    const runId = Date.now().toString(36);
-    console.log(`[Concurrency Harness] Initializing isolated test fixtures (Run ID: ${runId})...`);
+    console.log(`[Concurrency Harness] Initializing isolated test fixtures (Run ID: ${runId}, Token: ${runToken})...`);
 
     // -------------------------------------------------------------------------
-    // STEP 0: Fixture Preparation (Isolated Test Warehouses & Variants)
+    // STEP 0: Fixture Preparation with Zero Privilege Escalation & Strict Isolation
     // -------------------------------------------------------------------------
-    // 0.1 Setup test users and roles
-    await client1.query(`
-      -- Ensure warehouse_manager role exists
-      INSERT INTO public.auth_roles (name, title_fa, description, is_system)
-      VALUES ('warehouse_manager', 'مدیر انبار و لجستیک', 'مدیریت گردش انبار', true)
-      ON CONFLICT (name) DO NOTHING;
 
-      -- Create mock users in auth.users if available, and link in public.profiles
-      DO $$
-      BEGIN
-        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'users') THEN
-          INSERT INTO auth.users (id, email)
-          VALUES ('${TEST_MANAGER_ID}', 'concurrency-manager@cna.local'),
-                 ('${TEST_CUSTOMER_ID}', 'concurrency-customer@cna.local')
-          ON CONFLICT (id) DO NOTHING;
-        END IF;
-      END $$;
+    // 0.1 Generate completely unique test-user UUIDs and emails (Issue 1)
+    const testManagerId = crypto.randomUUID();
+    const testCustomerId = crypto.randomUUID();
+    const managerEmail = `test-mgr-${runToken}@concurrency.test`;
+    const customerEmail = `test-cust-${runToken}@concurrency.test`;
 
-      INSERT INTO public.profiles (id, full_name, phone)
-      VALUES ('${TEST_MANAGER_ID}', 'Concurrency Test Manager', '09129990001'),
-             ('${TEST_CUSTOMER_ID}', 'Concurrency Test Customer', '09129990002')
-      ON CONFLICT (id) DO NOTHING;
+    const srcWhCode = `W_${runToken}_SRC`;
+    const dstWhCode = `W_${runToken}_DST`;
+    const testProdSlug = `cna-test-${runToken}-prod`;
+    const testVariantSku = `CNA-VAR-${runToken}`;
+    const reduceVariantSku = `CNA-RED-${runToken}`;
+    const authVariantSku = `CNA-AUT-${runToken}`;
 
-      INSERT INTO public.auth_user_roles (user_id, role_id)
-      VALUES ('${TEST_MANAGER_ID}', (SELECT id FROM public.auth_roles WHERE name = 'warehouse_manager'))
-      ON CONFLICT (user_id, role_id) DO NOTHING;
+    // Verify identifiers satisfy column limits
+    if (srcWhCode.length > 20 || dstWhCode.length > 20) {
+      throw new Error(`Generated warehouse code exceeds VARCHAR(20) limit: ${srcWhCode}`);
+    }
+    if (testProdSlug.length > 150) {
+      throw new Error(`Generated product slug exceeds VARCHAR(150) limit: ${testProdSlug}`);
+    }
+    if (testVariantSku.length > 100 || reduceVariantSku.length > 100 || authVariantSku.length > 100) {
+      throw new Error(`Generated variant SKU exceeds VARCHAR(100) limit: ${testVariantSku}`);
+    }
+
+    // 0.2 Collision Pre-Check: Verify all generated identifiers are completely unused
+    console.log('[Fixture Provisioning] Running collision pre-check on generated identifiers...');
+    const collisionChecks = await Promise.all([
+      client1.query(`SELECT code FROM public.warehouses WHERE code IN ($1, $2);`, [srcWhCode, dstWhCode]),
+      client1.query(`SELECT slug FROM public.products WHERE slug = $1;`, [testProdSlug]),
+      client1.query(`SELECT sku FROM public.product_variants WHERE sku IN ($1, $2, $3);`, [
+        testVariantSku,
+        reduceVariantSku,
+        authVariantSku,
+      ]),
+      client1.query(`SELECT id FROM public.profiles WHERE id IN ($1::uuid, $2::uuid);`, [
+        testManagerId,
+        testCustomerId,
+      ]),
+    ]);
+
+    for (const check of collisionChecks) {
+      if (check.rows.length > 0) {
+        throw new Error(
+          `[Fixture Collision] Generated identifier already exists in database! Pre-check failed closed: ${JSON.stringify(
+            check.rows
+          )}`
+        );
+      }
+    }
+    console.log('[Fixture Provisioning] Collision pre-check passed: All identifiers are completely unique.');
+
+    // 0.3 Safe Test Identity Provisioning (Issue 1: Fail Closed)
+    // Verify system role 'warehouse_manager' exists before doing anything
+    const { rows: roleRows } = await client1.query(
+      `SELECT id FROM public.auth_roles WHERE name = 'warehouse_manager';`
+    );
+    if (!roleRows.length) {
+      throw new Error(
+        'Precondition Failed: Required system role "warehouse_manager" not found in public.auth_roles. Run migrations first.'
+      );
+    }
+    const warehouseManagerRoleId = roleRows[0].id;
+
+    // Check if auth.users table is present in the database
+    const { rows: authTableRows } = await client1.query(`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'auth' AND table_name = 'users'
+      ) AS exists;
     `);
+    const authUsersTableExists = authTableRows[0].exists;
 
-    // 0.2 Provision dedicated isolated test warehouses
-    const { rows: srcWhRows } = await client1.query(`
-      INSERT INTO public.warehouses (code, name_fa, address, is_central, is_active)
-      VALUES ('WH-TEST-CONCURRENCY-SRC', 'انبار تست همزمانی مبدا', 'تهران، انبار اختصاصی تست', false, true)
-      ON CONFLICT (code) DO UPDATE SET is_active = true
-      RETURNING id;
-    `);
+    // Acquire transaction-scoped advisory lock during user setup to eliminate race conditions between concurrent runs
+    await client1.query('BEGIN;');
+    try {
+      await client1.query(`SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext('cna_harness_identity_provisioning'));`);
+
+      if (authUsersTableExists) {
+        // Inspect available columns in auth.users to construct a safe, compliant insert
+        const { rows: colRows } = await client1.query(`
+          SELECT column_name FROM information_schema.columns
+          WHERE table_schema = 'auth' AND table_name = 'users';
+        `);
+        const authCols = new Set(colRows.map((r) => r.column_name));
+
+        const hasInstanceId = authCols.has('instance_id');
+        const hasAud = authCols.has('aud');
+        const hasRole = authCols.has('role');
+        const hasRawAppMeta = authCols.has('raw_app_meta_data');
+        const hasRawUserMeta = authCols.has('raw_user_meta_data');
+
+        const insertUserSql = `
+          INSERT INTO auth.users (
+            id, email
+            ${hasInstanceId ? ', instance_id' : ''}
+            ${hasAud ? ', aud' : ''}
+            ${hasRole ? ', role' : ''}
+            ${hasRawAppMeta ? ', raw_app_meta_data' : ''}
+            ${hasRawUserMeta ? ', raw_user_meta_data' : ''}
+          )
+          VALUES (
+            $1::uuid, $2
+            ${hasInstanceId ? ", '00000000-0000-0000-0000-000000000000'::uuid" : ''}
+            ${hasAud ? ", 'authenticated'" : ''}
+            ${hasRole ? ", 'authenticated'" : ''}
+            ${hasRawAppMeta ? ", '{\"provider\":\"email\",\"providers\":[\"email\"]}'::jsonb" : ''}
+            ${hasRawUserMeta ? ", '{}'::jsonb" : ''}
+          )
+          RETURNING id;
+        `;
+
+        await client1.query(insertUserSql, [testManagerId, managerEmail]);
+        registry.users.push({ id: testManagerId, email: managerEmail, createdInAuth: true });
+
+        await client1.query(insertUserSql, [testCustomerId, customerEmail]);
+        registry.users.push({ id: testCustomerId, email: customerEmail, createdInAuth: true });
+      }
+
+      // Insert profiles for both test accounts
+      await client1.query(
+        `INSERT INTO public.profiles (id, full_name, phone)
+         VALUES ($1::uuid, 'Isolated Harness Manager', NULL),
+                ($2::uuid, 'Isolated Harness Customer', NULL)
+         RETURNING id;`,
+        [testManagerId, testCustomerId]
+      );
+      registry.profiles.push({ id: testManagerId }, { id: testCustomerId });
+
+      // Attach warehouse_manager role ONLY to the newly created manager account
+      // Guaranteed safe: identity was positively established and exclusively owned by this run
+      await client1.query(
+        `INSERT INTO public.auth_user_roles (user_id, role_id)
+         VALUES ($1::uuid, $2::uuid)
+         RETURNING user_id, role_id;`,
+        [testManagerId, warehouseManagerRoleId]
+      );
+      registry.userRoles.push({ userId: testManagerId, roleId: warehouseManagerRoleId });
+
+      await client1.query('COMMIT;');
+    } catch (provisionErr) {
+      await client1.query('ROLLBACK;');
+      throw new Error(`[Safe Provisioning Failed] Failed to provision isolated test identities: ${(provisionErr as Error).message}`);
+    }
+
+    console.log('[Fixture Provisioning] Test identities safely provisioned with zero privilege escalation risk.');
+
+    // 0.4 Provision dedicated isolated test warehouses (Issue 2)
+    const { rows: srcWhRows } = await client1.query(
+      `INSERT INTO public.warehouses (code, name_fa, address, is_central, is_active)
+       VALUES ($1, 'انبار تست همزمانی مبدا', 'تهران، انبار اختصاصی تست ایزوله', false, true)
+       RETURNING id, code;`,
+      [srcWhCode]
+    );
     const srcWhId = srcWhRows[0].id;
+    registry.warehouses.push({ id: srcWhId, code: srcWhCode });
 
-    const { rows: dstWhRows } = await client1.query(`
-      INSERT INTO public.warehouses (code, name_fa, address, is_central, is_active)
-      VALUES ('WH-TEST-CONCURRENCY-DST', 'انبار تست همزمانی مقصد', 'تبریز، انبار اختصاصی تست', false, true)
-      ON CONFLICT (code) DO UPDATE SET is_active = true
-      RETURNING id;
-    `);
+    const { rows: dstWhRows } = await client1.query(
+      `INSERT INTO public.warehouses (code, name_fa, address, is_central, is_active)
+       VALUES ($1, 'انبار تست همزمانی مقصد', 'تبریز، انبار اختصاصی تست ایزوله', false, true)
+       RETURNING id, code;`,
+      [dstWhCode]
+    );
     const dstWhId = dstWhRows[0].id;
+    registry.warehouses.push({ id: dstWhId, code: dstWhCode });
 
-    // 0.3 Provision dedicated test category, brand, product & variants
-    const { rows: catRows } = await client1.query(`
-      SELECT id FROM public.categories WHERE is_active = true LIMIT 1;
-    `);
-    const { rows: brandRows } = await client1.query(`
-      SELECT id FROM public.brands LIMIT 1;
-    `);
-    const { rows: warRows } = await client1.query(`
-      SELECT id FROM public.warranties WHERE is_active = true LIMIT 1;
-    `);
+    // 0.5 Fetch baseline catalog taxonomy
+    const { rows: catRows } = await client1.query(`SELECT id FROM public.categories WHERE is_active = true LIMIT 1;`);
+    const { rows: brandRows } = await client1.query(`SELECT id FROM public.brands LIMIT 1;`);
+    const { rows: warRows } = await client1.query(`SELECT id FROM public.warranties WHERE is_active = true LIMIT 1;`);
 
     if (!catRows.length || !brandRows.length || !warRows.length) {
       throw new Error('Database lacks baseline catalog taxonomy (categories/brands/warranties). Run seed.sql first.');
@@ -193,99 +431,125 @@ async function runConcurrencyHarness() {
     const brandId = brandRows[0].id;
     const warId = warRows[0].id;
 
-    const { rows: prodRows } = await client1.query(`
-      INSERT INTO public.products (
-        slug, category_id, brand_id, title_fa, title_en, model_name,
-        description_fa, is_published, is_featured
-      )
-      VALUES (
-        'cna-test-concurrency-prod', '${catId}', '${brandId}',
-        'محصول تست همزمانی', 'CNA Concurrency Test Product', 'TEST-CONCURRENCY',
-        'محصول اختصاصی جهت آزمون‌های همزمانی و مسابقه تراکنش‌ها', true, false
-      )
-      ON CONFLICT (slug) DO UPDATE SET is_published = true
-      RETURNING id;
-    `);
+    // 0.6 Provision dedicated test product and variants
+    const { rows: prodRows } = await client1.query(
+      `INSERT INTO public.products (
+         slug, category_id, brand_id, title_fa, title_en, model_name,
+         description_fa, is_published, is_featured
+       )
+       VALUES (
+         $1, $2::uuid, $3::uuid,
+         'محصول تست همزمانی ایزوله', 'CNA Concurrency Test Product Isolated', 'TEST-CONCURRENCY',
+         'محصول اختصاصی آزمون‌های همزمانی با شناسه یکتای اجرا', true, false
+       )
+       RETURNING id, slug;`,
+      [testProdSlug, catId, brandId]
+    );
     const testProdId = prodRows[0].id;
+    registry.products.push({ id: testProdId, slug: testProdSlug });
 
-    // Dedicated variant for transfers and general idempotency
-    const { rows: varRows } = await client1.query(`
-      INSERT INTO public.product_variants (
-        product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
-        storage, price_toman, cost_price_toman, is_published
-      )
-      VALUES (
-        '${testProdId}', '${warId}', 'CNA-TEST-CONCURRENCY', 'PN-CONCURRENCY',
-        'مشکی تستی', 'Test Black', '#000000',
-        '256GB', 15000000, 12000000, true
-      )
-      ON CONFLICT (sku) DO UPDATE SET is_published = true
-      RETURNING id;
-    `);
+    // Primary variant for transfers and idempotency
+    const { rows: varRows } = await client1.query(
+      `INSERT INTO public.product_variants (
+         product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
+         storage, price_toman, cost_price_toman, is_published
+       )
+       VALUES (
+         $1::uuid, $2::uuid, $3, $4,
+         'مشکی تستی', 'Test Black', '#000000',
+         '256GB', 15000000, 12000000, true
+       )
+       RETURNING id, sku;`,
+      [testProdId, warId, testVariantSku, `PN-VAR-${runToken}`]
+    );
     const testVariantId = varRows[0].id;
+    registry.variants.push({ id: testVariantId, sku: testVariantSku });
 
     // Dedicated variant for concurrent reductions
-    const reduceSku = `CNA-TEST-CONCURRENCY-RED-${runId}`;
-    const { rows: reduceVarRows } = await client1.query(`
-      INSERT INTO public.product_variants (
-        product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
-        storage, price_toman, cost_price_toman, is_published
-      )
-      VALUES (
-        '${testProdId}', '${warId}', '${reduceSku}', 'PN-CONCURRENCY-RED',
-        'سفید تستی', 'Test White', '#FFFFFF',
-        '128GB', 12000000, 10000000, true
-      )
-      ON CONFLICT (sku) DO UPDATE SET is_published = true
-      RETURNING id;
-    `);
+    const { rows: reduceVarRows } = await client1.query(
+      `INSERT INTO public.product_variants (
+         product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
+         storage, price_toman, cost_price_toman, is_published
+       )
+       VALUES (
+         $1::uuid, $2::uuid, $3, $4,
+         'سفید تستی', 'Test White', '#FFFFFF',
+         '128GB', 12000000, 10000000, true
+       )
+       RETURNING id, sku;`,
+      [testProdId, warId, reduceVariantSku, `PN-RED-${runToken}`]
+    );
     const reduceVariantId = reduceVarRows[0].id;
+    registry.variants.push({ id: reduceVariantId, sku: reduceVariantSku });
+
+    // Dedicated variant for explicit authorization test (Issue 3)
+    const { rows: authVarRows } = await client1.query(
+      `INSERT INTO public.product_variants (
+         product_id, warranty_id, sku, part_number, color_name_fa, color_name_en, color_hex,
+         storage, price_toman, cost_price_toman, is_published
+       )
+       VALUES (
+         $1::uuid, $2::uuid, $3, $4,
+         'خاکستری تستی', 'Test Grey', '#808080',
+         '512GB', 18000000, 15000000, true
+       )
+       RETURNING id, sku;`,
+      [testProdId, warId, authVariantSku, `PN-AUT-${runToken}`]
+    );
+    const authVariantId = authVarRows[0].id;
+    registry.variants.push({ id: authVariantId, sku: authVariantSku });
 
     const managerAuth: AuthContext = {
       role: 'authenticated',
-      sub: TEST_MANAGER_ID,
-      email: 'concurrency-manager@cna.local',
+      sub: testManagerId,
+      email: managerEmail,
     };
 
-    console.log('[Concurrency Harness] Isolated test entities successfully provisioned.');
+    const customerAuth: AuthContext = {
+      role: 'authenticated',
+      sub: testCustomerId,
+      email: customerEmail,
+    };
+
+    console.log('[Concurrency Harness] Genuinely isolated test entities successfully provisioned.');
 
     // -------------------------------------------------------------------------
     // TEST 1: Concurrent Identical Transfer Requests (Advisory Lock Serialization)
     // -------------------------------------------------------------------------
     console.log('\n--- 1. Testing Concurrent Identical Transfer Requests ---');
-    const transferKey = `HARNESS-XFER-${runId}`;
+    const transferKey = `XFER-${runToken}`; // Length 13 chars (base <= 96 chars)
 
     // Initialize inventory strictly through authoritative ledger RPC (zero direct projection mutations)
     await executeTx(client1, managerAuth, async (tx) => {
       await tx.query(`
         SELECT public.rpc_record_stock_movement(
-          p_warehouse_id := '${srcWhId}'::uuid,
-          p_variant_id := '${testVariantId}'::uuid,
+          p_warehouse_id := $1::uuid,
+          p_variant_id := $2::uuid,
           p_quantity_change := 20,
           p_movement_type := 'purchase_inflow',
           p_shelf_location := 'A-SRC-01',
           p_notes := 'Initial test opening stock',
-          p_idempotency_key := 'HARNESS-SETUP-INFLOW-${runId}'
+          p_idempotency_key := $3
         );
-      `);
+      `, [srcWhId, testVariantId, `SETUP-IN-${runToken}`]);
     });
 
     console.log(`[Test 1] Dispatching simultaneous transfers across Client 1 and Client 2 (Key: ${transferKey})...`);
     const transferSql = `
       SELECT public.rpc_transfer_warehouse_stock(
-        p_source_warehouse_id := '${srcWhId}'::uuid,
-        p_destination_warehouse_id := '${dstWhId}'::uuid,
-        p_variant_id := '${testVariantId}'::uuid,
+        p_source_warehouse_id := $1::uuid,
+        p_destination_warehouse_id := $2::uuid,
+        p_variant_id := $3::uuid,
         p_quantity := 3,
         p_shelf_location_dest := 'B-DST-01',
         p_notes := 'Concurrent transfer execution',
-        p_idempotency_key := '${transferKey}'
+        p_idempotency_key := $4
       ) AS result;
     `;
 
     const [res1, res2] = await Promise.all([
-      executeTx(client1, managerAuth, (tx) => tx.query(transferSql)),
-      executeTx(client2, managerAuth, (tx) => tx.query(transferSql)),
+      executeTx(client1, managerAuth, (tx) => tx.query(transferSql, [srcWhId, dstWhId, testVariantId, transferKey])),
+      executeTx(client2, managerAuth, (tx) => tx.query(transferSql, [srcWhId, dstWhId, testVariantId, transferKey])),
     ]);
 
     const out1 = res1.rows[0].result;
@@ -306,8 +570,8 @@ async function runConcurrencyHarness() {
     const { rows: xferLegs } = await client1.query(`
       SELECT COUNT(*) AS count
       FROM public.stock_movements
-      WHERE idempotency_key IN ('${transferKey}:OUT', '${transferKey}:IN');
-    `);
+      WHERE idempotency_key IN ($1, $2);
+    `, [`${transferKey}:OUT`, `${transferKey}:IN`]);
 
     if (parseInt(xferLegs[0].count, 10) !== 2) {
       throw new Error(`Test 1 Failed: Expected exactly 2 ledger movements (one OUT, one IN), found ${xferLegs[0].count}`);
@@ -322,14 +586,14 @@ async function runConcurrencyHarness() {
       await executeTx(client1, managerAuth, async (tx) => {
         await tx.query(`
           SELECT public.rpc_transfer_warehouse_stock(
-            p_source_warehouse_id := '${srcWhId}'::uuid,
-            p_destination_warehouse_id := '${dstWhId}'::uuid,
-            p_variant_id := '${testVariantId}'::uuid,
+            p_source_warehouse_id := $1::uuid,
+            p_destination_warehouse_id := $2::uuid,
+            p_variant_id := $3::uuid,
             p_quantity := 99, -- Conflicting quantity (original was 3)
             p_shelf_location_dest := 'B-DST-01',
-            p_idempotency_key := '${transferKey}'
+            p_idempotency_key := $4
           );
-        `);
+        `, [srcWhId, dstWhId, testVariantId, transferKey]);
       });
       throw new Error('Test 2 Failed: Conflicting retry was not rejected!');
     } catch (err: unknown) {
@@ -348,36 +612,36 @@ async function runConcurrencyHarness() {
     await executeTx(client1, managerAuth, async (tx) => {
       await tx.query(`
         SELECT public.rpc_record_stock_movement(
-          p_warehouse_id := '${srcWhId}'::uuid,
-          p_variant_id := '${reduceVariantId}'::uuid,
+          p_warehouse_id := $1::uuid,
+          p_variant_id := $2::uuid,
           p_quantity_change := 5,
           p_movement_type := 'purchase_inflow',
           p_shelf_location := 'A-SRC-RED',
           p_notes := 'Setup exactly 5 units for reduction race test',
-          p_idempotency_key := 'HARNESS-SETUP-RED-${runId}'
+          p_idempotency_key := $3
         );
-      `);
+      `, [srcWhId, reduceVariantId, `SETUP-RED-${runToken}`]);
     });
 
     console.log('[Test 3] Available stock is 5 units. Launching simultaneous sales of 4 units (-4) each...');
-    const saleKey1 = `HARNESS-SALE-1-${runId}`;
-    const saleKey2 = `HARNESS-SALE-2-${runId}`;
+    const saleKey1 = `SALE-1-${runToken}`;
+    const saleKey2 = `SALE-2-${runToken}`;
 
-    const reduceSql = (key: string) => `
+    const reduceSql = `
       SELECT public.rpc_record_stock_movement(
-        p_warehouse_id := '${srcWhId}'::uuid,
-        p_variant_id := '${reduceVariantId}'::uuid,
+        p_warehouse_id := $1::uuid,
+        p_variant_id := $2::uuid,
         p_quantity_change := -4,
         p_movement_type := 'order_sale',
         p_shelf_location := 'A-SRC-RED',
         p_notes := 'Concurrent reduction execution',
-        p_idempotency_key := '${key}'
+        p_idempotency_key := $3
       ) AS result;
     `;
 
     const reductionResults = await Promise.allSettled([
-      executeTx(client1, managerAuth, (tx) => tx.query(reduceSql(saleKey1))),
-      executeTx(client2, managerAuth, (tx) => tx.query(reduceSql(saleKey2))),
+      executeTx(client1, managerAuth, (tx) => tx.query(reduceSql, [srcWhId, reduceVariantId, saleKey1])),
+      executeTx(client2, managerAuth, (tx) => tx.query(reduceSql, [srcWhId, reduceVariantId, saleKey2])),
     ]);
 
     const fulfilled = reductionResults.filter((r) => r.status === 'fulfilled');
@@ -395,8 +659,8 @@ async function runConcurrencyHarness() {
     const { rows: redBalRows } = await client1.query(`
       SELECT quantity_on_hand
       FROM public.warehouse_stock
-      WHERE warehouse_id = '${srcWhId}' AND variant_id = '${reduceVariantId}';
-    `);
+      WHERE warehouse_id = $1::uuid AND variant_id = $2::uuid;
+    `, [srcWhId, reduceVariantId]);
     const remainingStock = redBalRows[0].quantity_on_hand;
 
     if (remainingStock !== 1) {
@@ -412,14 +676,14 @@ async function runConcurrencyHarness() {
       await executeTx(client1, managerAuth, async (tx) => {
         await tx.query(`
           SELECT public.rpc_record_stock_movement(
-            p_warehouse_id := '${srcWhId}'::uuid,
-            p_variant_id := '${reduceVariantId}'::uuid,
+            p_warehouse_id := $1::uuid,
+            p_variant_id := $2::uuid,
             p_quantity_change := -99999,
             p_movement_type := 'order_sale',
             p_shelf_location := 'A-SRC-RED',
-            p_idempotency_key := 'HARNESS-MASSIVE-OVERDRAFT-${runId}'
+            p_idempotency_key := $3
           );
-        `);
+        `, [srcWhId, reduceVariantId, `MASSIVE-OVERDRAFT-${runToken}`]);
       });
       throw new Error('Test 4 Failed: Massive overdraft was permitted!');
     } catch (err: unknown) {
@@ -434,20 +698,20 @@ async function runConcurrencyHarness() {
     // TEST 5: Single-Movement Idempotency
     // -------------------------------------------------------------------------
     console.log('\n--- 5. Testing Single-Movement Idempotency ---');
-    const singleKey = `HARNESS-SINGLE-IDEMP-${runId}`;
+    const singleKey = `SINGLE-IDEMP-${runToken}`;
     const singleSql = `
       SELECT public.rpc_record_stock_movement(
-        p_warehouse_id := '${srcWhId}'::uuid,
-        p_variant_id := '${testVariantId}'::uuid,
+        p_warehouse_id := $1::uuid,
+        p_variant_id := $2::uuid,
         p_quantity_change := 1,
         p_movement_type := 'purchase_inflow',
         p_shelf_location := 'A-SRC-01',
-        p_idempotency_key := '${singleKey}'
+        p_idempotency_key := $3
       ) AS result;
     `;
 
-    const sRes1 = await executeTx(client1, managerAuth, (tx) => tx.query(singleSql));
-    const sRes2 = await executeTx(client1, managerAuth, (tx) => tx.query(singleSql));
+    const sRes1 = await executeTx(client1, managerAuth, (tx) => tx.query(singleSql, [srcWhId, testVariantId, singleKey]));
+    const sRes2 = await executeTx(client1, managerAuth, (tx) => tx.query(singleSql, [srcWhId, testVariantId, singleKey]));
 
     if (sRes1.rows[0].result.status !== 'recorded' || sRes2.rows[0].result.status !== 'idempotent_duplicate') {
       throw new Error(`Test 5 Failed: Expected 'recorded' then 'idempotent_duplicate', got: ${sRes1.rows[0].result.status}, ${sRes2.rows[0].result.status}`);
@@ -462,14 +726,14 @@ async function runConcurrencyHarness() {
       await executeTx(client1, managerAuth, async (tx) => {
         await tx.query(`
           SELECT public.rpc_record_stock_movement(
-            p_warehouse_id := '${srcWhId}'::uuid,
-            p_variant_id := '${testVariantId}'::uuid,
+            p_warehouse_id := $1::uuid,
+            p_variant_id := $2::uuid,
             p_quantity_change := 1,
             p_movement_type := 'purchase_inflow',
             p_shelf_location := 'CONFLICTING-SHELF-99', -- Conflicting shelf
-            p_idempotency_key := '${singleKey}'
+            p_idempotency_key := $3
           );
-        `);
+        `, [srcWhId, testVariantId, singleKey]);
       });
       throw new Error('Test 6 Failed: Conflicting shelf location was not rejected!');
     } catch (err: unknown) {
@@ -481,11 +745,10 @@ async function runConcurrencyHarness() {
     }
 
     // -------------------------------------------------------------------------
-    // TEST 7: Inventory Ledger Reconciliation Invariant (FULL OUTER JOIN)
+    // TEST 7: Strict Inventory Ledger Reconciliation Invariant (FULL OUTER JOIN)
     // -------------------------------------------------------------------------
-    console.log('\n--- 7. Testing Inventory Ledger Reconciliation Invariant ---');
-    // Using FULL OUTER JOIN between warehouse_stock projection and stock_movements ledger totals.
-    // Parameterized with dedicated test warehouse UUIDs to ensure complete isolation.
+    console.log('\n--- 7. Testing Strict Inventory Ledger Reconciliation Invariant ---');
+    // FULL OUTER JOIN strictly scoped to the current run's dedicated warehouse and variant UUIDs
     const reconciliationQuery = `
       WITH ledger_totals AS (
         SELECT
@@ -495,6 +758,7 @@ async function runConcurrencyHarness() {
           COUNT(*) AS movement_count
         FROM public.stock_movements
         WHERE warehouse_id IN ($1::uuid, $2::uuid)
+          AND variant_id = ANY($3::uuid[])
         GROUP BY warehouse_id, variant_id
       ),
       projection AS (
@@ -504,6 +768,7 @@ async function runConcurrencyHarness() {
           quantity_on_hand AS projection_stock
         FROM public.warehouse_stock
         WHERE warehouse_id IN ($1::uuid, $2::uuid)
+          AND variant_id = ANY($3::uuid[])
       )
       SELECT
         COALESCE(p.warehouse_id, l.warehouse_id) AS warehouse_id,
@@ -517,29 +782,36 @@ async function runConcurrencyHarness() {
         ON p.warehouse_id = l.warehouse_id AND p.variant_id = l.variant_id;
     `;
 
-    const { rows: reconRows } = await client1.query(reconciliationQuery, [srcWhId, dstWhId]);
+    const { rows: reconRows } = await client1.query(reconciliationQuery, [
+      srcWhId,
+      dstWhId,
+      [testVariantId, reduceVariantId],
+    ]);
 
-    // Problem 1 Prevention: Assert non-empty result set and presence of all expected combinations
+    // Problem 1 Prevention: Assert non-empty result set and strict count
     if (!reconRows || reconRows.length === 0) {
       throw new Error('Test 7 Failed: Ledger reconciliation returned 0 rows! Expected test inventory combinations were not found.');
     }
 
-    if (reconRows.length < 3) {
-      throw new Error(`Test 7 Failed: Expected at least 3 test inventory combinations in reconciliation, found only ${reconRows.length}.`);
-    }
-
     const expectedCombinations = [
-      { wh: srcWhId, variant: testVariantId, label: 'Source WH + Test Variant (after inflow & transfer out)' },
-      { wh: dstWhId, variant: testVariantId, label: 'Destination WH + Test Variant (after transfer in)' },
-      { wh: srcWhId, variant: reduceVariantId, label: 'Source WH + Reduction Variant (after inflow & sale reduction)' },
+      { wh: srcWhId, variant: testVariantId, expectedStock: 18, label: 'Source WH + Test Variant (20 inflow - 3 transfer out + 1 single = 18)' },
+      { wh: dstWhId, variant: testVariantId, expectedStock: 3, label: 'Destination WH + Test Variant (3 transfer in = 3)' },
+      { wh: srcWhId, variant: reduceVariantId, expectedStock: 1, label: 'Source WH + Reduction Variant (5 inflow - 4 sale = 1)' },
     ];
+
+    if (reconRows.length !== expectedCombinations.length) {
+      throw new Error(`Test 7 Failed: Expected exactly ${expectedCombinations.length} test inventory combinations, found ${reconRows.length}.`);
+    }
 
     for (const exp of expectedCombinations) {
       const match = reconRows.find(
         (r) => r.warehouse_id === exp.wh && r.variant_id === exp.variant
       );
       if (!match) {
-        throw new Error(`Test 7 Failed: Expected test combination missing from reconciliation results: ${exp.label} (${exp.wh}, ${exp.variant})`);
+        throw new Error(`Test 7 Failed: Expected combination missing from reconciliation results: ${exp.label} (${exp.wh}, ${exp.variant})`);
+      }
+      if (match.projection_stock !== exp.expectedStock) {
+        throw new Error(`Test 7 Failed: Expected stock ${exp.expectedStock} for ${exp.label}, got projection ${match.projection_stock}`);
       }
     }
 
@@ -564,9 +836,101 @@ async function runConcurrencyHarness() {
     console.log(`✓ [Test 7 Passed] Ledger invariant strictly reconciled: FULL OUTER JOIN confirmed projection === ledger sum across ${reconRows.length} test inventory combinations.`);
 
     // -------------------------------------------------------------------------
-    // TEST 8: Database Authorization, Simulated JWT Context & RLS Verification Across Roles
+    // TEST 8: Explicit Dual-Assertion Warehouse Manager & Customer Authorization Suite (Issue 3)
     // -------------------------------------------------------------------------
-    console.log('\n--- 8. Testing PostgreSQL Role, JWT Context, and RLS Verification Across Roles ---');
+    console.log('\n--- 8. Testing Explicit Manager-Positive & Customer-Negative Authorization ---');
+    const authDeniedKey = `AUTH-DENIED-${runToken}`;
+    const authPermittedKey = `AUTH-PERMITTED-${runToken}`;
+
+    // 8.1 Customer Negative Assertion: Unprivileged customer CANNOT execute inventory RPC
+    console.log('[Test 8.1] Customer attempting unprivileged inventory RPC...');
+    try {
+      await executeTx(client1, customerAuth, async (tx) => {
+        await tx.query(`
+          SELECT public.rpc_record_stock_movement(
+            p_warehouse_id := $1::uuid,
+            p_variant_id := $2::uuid,
+            p_quantity_change := 10,
+            p_movement_type := 'purchase_inflow',
+            p_shelf_location := 'SEC-AUTH-01',
+            p_idempotency_key := $3
+          );
+        `, [srcWhId, authVariantId, authDeniedKey]);
+      });
+      throw new Error('Test 8.1 Failed: Unprivileged customer was able to execute inventory RPC!');
+    } catch (err: unknown) {
+      const msg = (err as Error).message;
+      if (!msg.includes('دسترسی غیرمجاز') && !msg.includes('42501')) {
+        throw new Error(`Test 8.1 Failed: Unexpected error for customer denial: ${msg}`);
+      }
+      console.log('✓ [Test 8.1 Passed] Customer rejected with SQLSTATE 42501 / ERR_INSUFFICIENT_PRIVILEGE.');
+    }
+
+    // 8.2 Verify Zero Side-Effects on Denial: No ledger movement and no projection mutation
+    const { rows: deniedLedgerRows } = await client1.query(`
+      SELECT COUNT(*) AS count FROM public.stock_movements WHERE idempotency_key = $1;
+    `, [authDeniedKey]);
+    if (parseInt(deniedLedgerRows[0].count, 10) !== 0) {
+      throw new Error('Test 8.2 Failed: Denied customer request created an orphan ledger movement!');
+    }
+
+    const { rows: deniedProjectionRows } = await client1.query(`
+      SELECT quantity_on_hand FROM public.warehouse_stock
+      WHERE warehouse_id = $1::uuid AND variant_id = $2::uuid;
+    `, [srcWhId, authVariantId]);
+    if (deniedProjectionRows.length > 0 && deniedProjectionRows[0].quantity_on_hand !== 0) {
+      throw new Error(`Test 8.2 Failed: Denied customer request altered stock projection: ${deniedProjectionRows[0].quantity_on_hand}`);
+    }
+    console.log('✓ [Test 8.2 Passed] Zero side-effects verified: Rejected request created 0 ledger rows and 0 stock change.');
+
+    // 8.3 Manager Positive Assertion: Warehouse manager CAN execute inventory RPC
+    console.log('[Test 8.3] Authorized warehouse manager executing permitted inventory RPC...');
+    const managerAuthRes = await executeTx(client1, managerAuth, async (tx) => {
+      const { rows } = await tx.query(`
+        SELECT public.rpc_record_stock_movement(
+          p_warehouse_id := $1::uuid,
+          p_variant_id := $2::uuid,
+          p_quantity_change := 10,
+          p_movement_type := 'purchase_inflow',
+          p_shelf_location := 'SEC-AUTH-01',
+          p_idempotency_key := $3
+        ) AS result;
+      `, [srcWhId, authVariantId, authPermittedKey]);
+      return rows[0].result;
+    });
+
+    if (managerAuthRes.status !== 'recorded' || !managerAuthRes.movement_id) {
+      throw new Error(`Test 8.3 Failed: Manager RPC execution did not return 'recorded': ${JSON.stringify(managerAuthRes)}`);
+    }
+    console.log('✓ [Test 8.3 Passed] Warehouse manager successfully recorded inventory movement.');
+
+    // 8.4 Reconcile Resulting Inventory Against Ledger for Auth Test Fixture
+    const { rows: authReconRows } = await client1.query(`
+      WITH ledger AS (
+        SELECT SUM(quantity_change) AS sum_qty, COUNT(*) AS count_mov
+        FROM public.stock_movements
+        WHERE warehouse_id = $1::uuid AND variant_id = $2::uuid
+      ),
+      stock AS (
+        SELECT quantity_on_hand FROM public.warehouse_stock
+        WHERE warehouse_id = $1::uuid AND variant_id = $2::uuid
+      )
+      SELECT stock.quantity_on_hand, ledger.sum_qty, ledger.count_mov
+      FROM stock, ledger;
+    `, [srcWhId, authVariantId]);
+
+    if (!authReconRows.length || authReconRows[0].quantity_on_hand !== 10 || parseInt(authReconRows[0].sum_qty, 10) !== 10) {
+      throw new Error(`Test 8.4 Failed: Auth test fixture ledger reconciliation discrepancy: ${JSON.stringify(authReconRows)}`);
+    }
+    if (parseInt(authReconRows[0].count_mov, 10) !== 1) {
+      throw new Error(`Test 8.4 Failed: Expected exactly 1 movement, got ${authReconRows[0].count_mov}`);
+    }
+    console.log('✓ [Test 8.4 Passed] Authorization test fixture strictly reconciled against ledger (stock: 10, ledger: 10, movements: 1).');
+
+    // -------------------------------------------------------------------------
+    // TEST 9: PostgreSQL Role, JWT Context, and RLS Verification Across Roles
+    // -------------------------------------------------------------------------
+    console.log('\n--- 9. Testing PostgreSQL Role, JWT Context, and RLS Verification Across Roles ---');
 
     // Scope Clarification:
     // This test suite verifies PostgreSQL-level authorization:
@@ -574,20 +938,20 @@ async function runConcurrencyHarness() {
     // - Table-level grants (warehouse_stock denied for anon)
     // - View security (v_storefront_products granted to anon)
     // - Row-Level Security (RLS) policies filtering warehouse_stock for unprivileged authenticated users
-    // - RPC execution authorization (rpc_record_stock_movement denied for customer, permitted for warehouse_manager)
+    // - Administrative privileges for service_role
     //
     // Note: Because this test connects directly to PostgreSQL via node-postgres (pg), it tests the database's
     // internal authorization logic under simulated PostgREST GUC context (request.jwt.claims).
     // It does NOT test the HTTP PostgREST API Gateway (header parsing, JWT cryptographic signature validation,
     // or token expiry). PostgREST gateway tests must be run against the HTTP API endpoint.
 
-    // 8.1 anon: Cannot select cost_price_toman
+    // 9.1 anon: Cannot select cost_price_toman
     const anonAuth: AuthContext = { role: 'anon' };
     try {
       await executeTx(client1, anonAuth, async (tx) => {
         await tx.query(`SELECT cost_price_toman FROM public.product_variants LIMIT 1;`);
       });
-      throw new Error('Test 8.1 Failed: anon was able to select cost_price_toman!');
+      throw new Error('Test 9.1 Failed: anon was able to select cost_price_toman!');
     } catch (err: unknown) {
       if (!(err as Error).message.includes('permission denied') && !(err as Error).message.includes('42501')) {
         throw err;
@@ -595,12 +959,12 @@ async function runConcurrencyHarness() {
       console.log('✓ [Security: anon] Column cost_price_toman denied with SQLSTATE 42501.');
     }
 
-    // 8.2 anon: Cannot select from warehouse_stock
+    // 9.2 anon: Cannot select from warehouse_stock
     try {
       await executeTx(client1, anonAuth, async (tx) => {
         await tx.query(`SELECT * FROM public.warehouse_stock LIMIT 1;`);
       });
-      throw new Error('Test 8.2 Failed: anon was able to select warehouse_stock!');
+      throw new Error('Test 9.2 Failed: anon was able to select warehouse_stock!');
     } catch (err: unknown) {
       if (!(err as Error).message.includes('permission denied') && !(err as Error).message.includes('42501')) {
         throw err;
@@ -608,68 +972,49 @@ async function runConcurrencyHarness() {
       console.log('✓ [Security: anon] Table warehouse_stock denied with SQLSTATE 42501.');
     }
 
-    // 8.3 anon: CAN select from v_storefront_products
+    // 9.3 anon: CAN select from v_storefront_products
     await executeTx(client1, anonAuth, async (tx) => {
       const { rows } = await tx.query(`SELECT id, slug, name, price, "stockCount" FROM public.v_storefront_products LIMIT 1;`);
       if (!rows.length) {
-        throw new Error('Test 8.3 Failed: anon could not read v_storefront_products');
+        throw new Error('Test 9.3 Failed: anon could not read v_storefront_products');
       }
     });
     console.log('✓ [Security: anon] Public storefront view read granted and functional.');
 
-    // 8.4 authenticated customer: Filtered to 0 rows by RLS on warehouse_stock
-    const customerAuth: AuthContext = {
-      role: 'authenticated',
-      sub: TEST_CUSTOMER_ID,
-      email: 'concurrency-customer@cna.local',
-    };
-
+    // 9.4 authenticated customer: Filtered to 0 rows by RLS on warehouse_stock
     await executeTx(client1, customerAuth, async (tx) => {
       const { rows } = await tx.query(`SELECT COUNT(*) AS count FROM public.warehouse_stock;`);
       if (parseInt(rows[0].count, 10) !== 0) {
-        throw new Error(`Test 8.4 Failed: Unprivileged customer saw ${rows[0].count} warehouse_stock rows through RLS!`);
+        throw new Error(`Test 9.4 Failed: Unprivileged customer saw ${rows[0].count} warehouse_stock rows through RLS!`);
       }
     });
     console.log('✓ [Security: customer] warehouse_stock rows strictly filtered to 0 for unprivileged customer.');
 
-    // 8.5 authenticated customer: Cannot execute inventory RPC
-    try {
-      await executeTx(client1, customerAuth, async (tx) => {
-        await tx.query(`
-          SELECT public.rpc_record_stock_movement(
-            p_warehouse_id := '${srcWhId}'::uuid,
-            p_variant_id := '${testVariantId}'::uuid,
-            p_quantity_change := 1,
-            p_movement_type := 'purchase_inflow'
-          );
-        `);
-      });
-      throw new Error('Test 8.5 Failed: Unprivileged customer was able to execute inventory RPC!');
-    } catch (err: unknown) {
-      const msg = (err as Error).message;
-      if (!msg.includes('دسترسی غیرمجاز') && !msg.includes('42501')) {
-        throw err;
-      }
-      console.log('✓ [Security: customer] Inventory mutation denied for unprivileged customer.');
-    }
-
-    // 8.6 service_role: Has full administrative permissions
+    // 9.5 service_role: Has full administrative permissions
     const serviceAuth: AuthContext = { role: 'service_role' };
     await executeTx(client1, serviceAuth, async (tx) => {
       const { rows } = await tx.query(`SELECT cost_price_toman FROM public.product_variants LIMIT 1;`);
       if (!rows.length) {
-        throw new Error('Test 8.6 Failed: service_role could not read product_variants');
+        throw new Error('Test 9.5 Failed: service_role could not read product_variants');
       }
     });
     console.log('✓ [Security: service_role] Administrative table and confidential column access verified.');
 
     console.log('\n======================================================================');
-    console.log('>>> [Concurrency Harness] ALL 8 PRE-STAGING SUITES PASSED! <<<');
+    console.log('>>> [Concurrency Harness] ALL PRE-STAGING SUITES PASSED! <<<');
     console.log('======================================================================');
   } catch (err) {
     console.error('[Concurrency Harness] FATAL ERROR:', err);
     process.exitCode = 1;
   } finally {
+    // Execute safe cleanup before disconnecting clients
+    try {
+      if (client1) {
+        await cleanupHarnessFixtures(client1, registry);
+      }
+    } catch (cleanupErr) {
+      console.error('[Concurrency Harness] Cleanup error:', cleanupErr);
+    }
     await Promise.allSettled([client1.end(), client2.end()]);
   }
 }

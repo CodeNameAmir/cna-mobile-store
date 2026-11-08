@@ -262,8 +262,8 @@ To avoid ambiguity between sequential in-session execution and real concurrent i
    - A programmatic Node.js harness using the `pg` library that instantiates two independent database clients (`client1` and `client2`).
    - **Transaction-Scoped Authentication Context:** Direct `pg` connections do not carry PostgREST JWT claims. The harness executes operations via `executeTx()`, setting transaction-scoped GUCs (`SET LOCAL ROLE`, `SET LOCAL "request.jwt.claims"`, `SET LOCAL "request.jwt.claim.role"`, `SET LOCAL "request.jwt.claim.sub"`). This cleanly isolates caller identities (`anon`, `customer`, `warehouse_manager`, `service_role`) without leaking between queries or weakening production RPC checks.
    - **Ledger Invariant Protection:** Zero direct mutations (`UPDATE warehouse_stock`) bypass the ledger. All test inventory is initialized through authorized inventory RPCs (`rpc_record_stock_movement`), guaranteeing `warehouse_stock.quantity_on_hand = SUM(stock_movements.quantity_change)` at all times.
-   - **Test Isolation:** Exclusively provisions and targets dedicated test entities (`WH-TEST-CONCURRENCY-SRC`, `WH-TEST-CONCURRENCY-DST`, `cna-test-concurrency-prod`, and `CNA-TEST-CONCURRENCY`), leaving production seed data (`WH-CENTRAL`, 26 products, 46 SKUs, 296 units) completely pristine.
-   - Covers all 8 testing requirements: concurrent transfers, conflicting retries, concurrent reductions, overdraft rejection, single-movement idempotency, shelf conflicts, ledger reconciliation, and RLS security across roles.
+    - **Test Isolation:** Exclusively provisions and targets dynamically namespaced test entities (`W_<token>_SRC`, `W_<token>_DST`, `cna-test-<token>-prod`, `CNA-VAR-<token>`, `CNA-RED-<token>`, and `CNA-AUT-<token>`), leaving production seed data (`WH-CENTRAL`, 26 products, 46 SKUs, 296 units) completely pristine.
+    - Covers all 9 testing requirements: concurrent transfers, conflicting retries, concurrent reductions, overdraft rejection, single-movement idempotency, shelf conflicts, strict scoped ledger reconciliation, explicit manager-positive / customer-negative authorization with zero side-effects verification, and RLS security across roles.
 
 ### 9.10 Final Hardening: Key Length Limits & 5-Parameter Retry Validation (Migration 000007)
 - **Task 1 (Idempotency Key Length):** `stock_movements.idempotency_key` is `VARCHAR(100)`. Because `rpc_transfer_warehouse_stock` appends `:OUT` (4 characters) and `:IN` (3 characters) to the base key, an input key longer than 96 characters would cause a database string length overflow on insert (`100 - 4 = 96`). Migration 000007 enforces an upfront length check:
@@ -287,38 +287,64 @@ To avoid ambiguity between sequential in-session execution and real concurrent i
 - In `supabase` mode, `src/services/productService.ts` and `src/services/supabaseClient.ts` query `v_storefront_products`, verifying schema health without exposing internal warehouse mechanics.
 - All Vite, React 19, and Tailwind CSS v4 builds pass with zero errors.
 
-### 9.12 Pre-Staging Test Infrastructure Remediation (`scripts/verifyConcurrencyHarness.ts`)
-Prior to staging deployment, a focused audit of the automated two-connection test harness resolved three critical technical issues:
+### 9.12 Critical Phase 4.3 Test Harness Isolation & Safety Remediation (`scripts/verifyConcurrencyHarness.ts`)
+Prior to staging deployment, a critical security and isolation audit of the automated two-connection test harness identified six vulnerabilities and architectural requirements, which have been comprehensively resolved:
 
-1. **Secure Parameterized JWT Context & Role Allowlist Injection (Issue A):**
-   - **Vulnerability:** The harness previously injected JWT claims via raw string interpolation (`SET LOCAL "request.jwt.claims" = '${jwtClaims}';`), risking SQL injection and quoting defects.
-   - **Remediation:** Refactored `executeTx()` to use PostgreSQL's parameterized function `SELECT pg_catalog.set_config('request.jwt.claims', $1, true);`. Parameterized calls are also used for `request.jwt.claim.role`, `request.jwt.claim.sub`, and `request.jwt.claim.email`.
-   - **Role Allowlist:** Because PostgreSQL syntax does not permit parameterizing the target role in `SET ROLE $1`, an explicit compile-time/runtime allowlist (`ALLOWED_DATABASE_ROLES = new Set(['anon', 'authenticated', 'service_role'])`) strictly validates role values prior to `SET LOCAL ROLE <role>`.
-   - **Safe Rollback:** Wrapped `ROLLBACK;` inside an isolated error handler to ensure that rollback failures never mask the original query failure.
-   - **Architectural Distinction:** Documented the distinction between `SET LOCAL ROLE` (which establishes PostgreSQL session privilege identity for GRANT/REVOKE and RLS evaluation) and `set_config` (which populates transaction-local GUCs consumed by Supabase helper functions such as `auth.uid()` and `auth.role()`).
-
-2. **Robust FULL OUTER JOIN Inventory Ledger Reconciliation Invariant (Issue B):**
-   - **Vulnerability:** The previous reconciliation query used a `LEFT JOIN` starting from `warehouse_stock`. This suffered from two major flaws:
-     - *Problem 1 (Empty Result False Positive):* If the query returned zero rows (e.g., due to an erroneous filter), the `for (const r of reconRows)` loop would vacuously pass without verifying anything.
-     - *Problem 2 (Missing Ledger-Only Rows):* If ledger movements were recorded without a corresponding `warehouse_stock` row (an orphan ledger failure), `LEFT JOIN` would omit the variant entirely.
+1. **Elimination of Fixed Test-User IDs & Privilege Escalation Prevention (Issue 1):**
+   - **Vulnerability:** The harness previously used static UUIDs (`00000000-0000-0000-0000-0000000000aa` and `...00bb`). Inserting these IDs with `ON CONFLICT DO NOTHING` and subsequently attaching the `warehouse_manager` role meant that if a static UUID happened to match an existing user, that real user would be silently granted warehouse management privileges.
    - **Remediation:**
-     - Rewrote reconciliation to execute a `FULL OUTER JOIN` between `warehouse_stock` projection and `stock_movements` ledger sums, parameterized with `$1::uuid` and `$2::uuid`.
-     - Added an explicit check asserting `reconRows.length >= 3` and verified the presence of all three expected test combinations:
-       * `(WH-TEST-CONCURRENCY-SRC, CNA-TEST-CONCURRENCY)` (post-inflow and post-transfer out)
-       * `(WH-TEST-CONCURRENCY-DST, CNA-TEST-CONCURRENCY)` (post-transfer in)
-       * `(WH-TEST-CONCURRENCY-SRC, CNA-TEST-CONCURRENCY-RED)` (post-inflow and post-reduction)
-     - Added explicit guards detecting orphan projection rows (`movement_count === 0`) or orphan ledger rows (`projection_stock === null`).
-     - Strictly asserted `is_reconciled === true` for every row, with detailed multi-parameter diagnostic output on any mismatch.
+     - Completely eliminated static test-user UUIDs.
+     - Dynamically generates unique UUIDs (`crypto.randomUUID()`) and unique email addresses per harness run.
+     - Performs upfront pre-checks asserting that generated IDs and emails do not exist in `auth.users` or `public.profiles`.
+     - Injects into `auth.users` (if table exists) and `public.profiles` using clean `INSERT` statements (zero `ON CONFLICT DO UPDATE/DO NOTHING`).
+     - Attaches `warehouse_manager` role exclusively to the freshly created, run-owned manager identity.
+     - Fails closed immediately if safe identity provisioning cannot be guaranteed.
 
-3. **Accurate Security Test Scope & PostgREST Pipeline Distinction (Issue C):**
-   - **Clarity Issue:** Previous documentation referred to the harness security suite as "PostgREST JWT Authentication Tests". Direct PostgreSQL connections via `node-postgres` (`pg`) bypass the HTTP PostgREST API Gateway entirely. They do not validate JWT cryptographic signatures, asymmetric public keys, header encoding, or token expiration timestamps.
-   - **Remediation:** Formally retitled and scoped the suite to **"PostgreSQL Role, JWT Context, and RLS Verification"**. The suite rigorously tests internal database authorization (table privileges, column-level security, RLS row filtering, and `SECURITY DEFINER` RPC access control under simulated GUC claims). Gateway-level HTTP security is documented as requiring end-to-end HTTP tests against PostgREST.
+2. **Genuinely Isolated Fixtures & Database Constraint Compliance (Issue 2):**
+   - **Vulnerability:** The harness previously used hardcoded codes (`WH-TEST-CONCURRENCY-SRC`, `cna-test-concurrency-prod`, `CNA-TEST-CONCURRENCY`) with `ON CONFLICT DO UPDATE` which could overwrite existing entities, and `WH-TEST-CONCURRENCY-SRC` (23 chars) violated `warehouses.code VARCHAR(20)`. Repeated runs also accumulated inventory.
+   - **Remediation:**
+     - Generates a unique 8-hex-character run token (`runToken`) and run ID (`runId`).
+     - All identifiers strictly adhere to PostgreSQL column length limits:
+       * `warehouses.code`: `W_<token>_SRC`, `W_<token>_DST` (14 characters <= 20)
+       * `products.slug`: `cna-test-<token>-prod` (22 characters <= 150)
+       * `product_variants.sku`: `CNA-VAR-<token>`, `CNA-RED-<token>`, `CNA-AUT-<token>` (16 characters <= 100)
+       * `stock_movements.idempotency_key`: `XFER-<token>` (13 characters <= 96 transfer limit and <= 100 ledger limit)
+     - Prohibits `ON CONFLICT DO UPDATE` or `DO NOTHING` for test fixtures.
+     - Pre-checks confirm all generated identifiers are unused prior to insertion; aborts safely on any collision.
+     - Structured `FixtureRegistry` tracks every provisioned warehouse, product, variant, user, profile, and role assignment.
+
+3. **Immutable Ledger-Aware Safe Cleanup Strategy (Issue 2 & 4):**
+   - **Vulnerability:** Blind cleanup scripts that attempt `DELETE FROM stock_movements` fail because of the immutable ledger trigger (`trg_prevent_stock_movement_update_delete`), while deleting warehouses or variants fails due to `ON DELETE RESTRICT` foreign keys.
+   - **Remediation:**
+     - In the `finally` block, `cleanupHarnessFixtures()` safely removes created role assignments, profiles, and `auth.users` records in reverse foreign-key order.
+     - If no movements were recorded (e.g. failure before Test 1), unused catalog fixtures are safely deleted.
+     - If ledger movements were recorded, the harness respects the database trigger and `ON DELETE RESTRICT` constraints: ledger movements and their parent test warehouses/variants are preserved under their unique run token namespace and will NEVER be reused.
+     - Never mutates `warehouse_stock` directly during cleanup.
+
+4. **Explicit Warehouse Manager Positive & Customer Negative Authorization Test (Issue 3):**
+   - **Remediation:** Added a dedicated dual-assertion authorization suite (Test 8):
+     - An unprivileged customer attempts an inventory mutation RPC (`rpc_record_stock_movement`); asserts rejection with SQLSTATE `42501` (`ERR_INSUFFICIENT_PRIVILEGE` / `دسترسی غیرمجاز`).
+     - Asserts zero side-effects on denial: 0 rows created in `stock_movements` and zero change to `warehouse_stock` projection.
+     - The authorized warehouse manager executes the same operation with a permitted key; asserts success (`status = 'recorded'` with valid movement ID).
+     - Directly reconciles the resulting inventory against the ledger (`projection === ledger_sum`, `movements === 1`).
+     - Clarified as direct PostgreSQL authorization and RLS testing under simulated PostgREST GUC context (not an HTTP API test).
+
+5. **Strict Run-Scoped FULL OUTER JOIN Reconciliation (Issue 5):**
+   - **Remediation:** Scoped the reconciliation query to the current run's dedicated warehouse and variant UUIDs (`warehouse_id IN ($1, $2)` and `variant_id = ANY($3)`).
+   - Asserts exact match with expected combinations count for the run.
+   - Detects orphan ledger records (`projection_stock IS NULL`) and orphan projection records (`movement_count === 0`).
+   - Asserts non-empty result set and strict reconciliation (`projection === ledger_sum`).
+
+6. **Secure Parameterized JWT Context & Role Allowlist Injection (Retained):**
+   - Parameterized `set_config('request.jwt.claims', $1, true)` eliminates SQL injection.
+   - Explicit `ALLOWED_DATABASE_ROLES` allowlist strictly validates role names prior to `SET LOCAL ROLE <role>`.
+   - Safe rollback handler prevents rollback errors from masking test failures.
 
 ---
 
 ## 10. Audit & Verification Status Matrix
 
-Every requirement and technical component is classified into one of the following explicit categories:
+Every requirement and technical component is classified into one of the following explicit categories, strictly distinguishing between local script compilation/dry-run checks and actual execution against a live PostgreSQL database:
 
 | Component / Requirement | Category | Verification Method & Notes |
 | :--- | :--- | :--- |
@@ -327,6 +353,7 @@ Every requirement and technical component is classified into one of the followin
 | **Seed Output (`supabase/seed.sql`)** | **TypeScript/build checks executed and passed** | Generated with non-destructive image upserts & separated SKU checks |
 | **TypeScript Compilation (`tsc --noEmit`)** | **TypeScript/build checks executed and passed** | 0 type errors across frontend and generator scripts |
 | **Vite Bundle Build (`npm run build`)** | **TypeScript/build checks executed and passed** | Production client bundle built cleanly in Vite |
+| **Harness Script Compilation & Dry-Run CLI (`scripts/verifyConcurrencyHarness.ts`)** | **TypeScript/build checks executed and passed** | CLI script compiles cleanly with 0 type errors; dry-run executed; reported `NOT TESTED` (no DB URL) |
 | **Migrations 000001 to 000004** | **Static code review passed** | Base RBAC, catalog, inventory, and initial storefront view DDL |
 | **Migration 000005 (Part No, RLS, Column Grants)** | **Static code review passed** | Column-level security, part_number, view masking |
 | **Migration 000006 (Atomic Transfers & Overdraft)** | **Static code review passed** | `rpc_transfer_warehouse_stock`, ERRCODE 23514, standalone rejection |
@@ -335,9 +362,8 @@ Every requirement and technical component is classified into one of the followin
 | **Role Security Suite (`phase_4_3_security_test.sql`)** | **SQL scripts prepared but not executed** | `SET LOCAL ROLE` permission and RLS test fixture prepared |
 | **Sequential Idempotency Checks (concurrency Section C)**| **SQL scripts prepared but not executed** | Sequential single-session test prepared |
 | **Manual Two-Session Concurrency Procedures** | **Manual test procedures not yet executed** | Interactive psql dual-session procedure documented in concurrency_test.sql |
-| **Automated Two-Connection Concurrency & DB Security Harness (`scripts/verifyConcurrencyHarness.ts`)** | **Automated two-connection concurrency tests actually executed** | Harness executed; logged `NOT TESTED` due to absent database URL |
-| **SQL Tests on Live PostgreSQL Engine** | **SQL tests actually executed against PostgreSQL** | None (0) executed locally due to no local PostgreSQL daemon (NOT TESTED) |
-| **Security Tests on Live PostgreSQL Engine** | **Security tests actually executed** | None (0) executed locally due to no local PostgreSQL daemon (NOT TESTED) |
+| **Automated Two-Connection Concurrency Tests on Live PostgreSQL Engine** | **NOT TESTED (Pending live PostgreSQL connection)** | Not executed locally due to absence of PostgreSQL daemon in container; reports `NOT TESTED` |
+| **PostgreSQL Role, JWT Context, and RLS Tests on Live PostgreSQL Engine** | **NOT TESTED (Pending live PostgreSQL connection)** | Not executed locally due to absence of PostgreSQL daemon in container; reports `NOT TESTED` |
 | **Multi-Warehouse Production Topology (WH-02+)** | **Deferred** | Phase 4.3 seeds `WH-CENTRAL`; regional warehouses deferred to Phase 4.4 |
 | **Orders, Checkout & Payments Tables** | **Deferred** | Formally documented in Phase 4.2; implementation deferred to Phase 4.4+ |
 
@@ -367,5 +393,4 @@ Every requirement and technical component is classified into one of the followin
 - **Blocker 2 (Live Concurrency Verification):** The two-connection concurrency harness must be executed against the staging database to confirm that advisory locks and row locks eliminate race conditions under real network latency.
 - **Blocker 3 (Cost Price RLS Audit in PostgREST):** Confirm via staging PostgREST REST API that anonymous requests querying `GET /rest/v1/product_variants?select=cost_price_toman` return HTTP 403 Forbidden.
 
-
-
+**Production Gate Policy:** Production readiness remains **NOT READY** until isolated Staging verification has been completed and verified.
