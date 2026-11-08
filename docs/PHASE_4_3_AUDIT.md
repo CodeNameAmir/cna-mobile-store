@@ -258,10 +258,12 @@ To avoid ambiguity between sequential in-session execution and real concurrent i
    - Scenario B: Two distinct sessions attempt concurrent reductions of 4 units against an initial stock of 5; pessimistic row locking (`FOR UPDATE`) serializes the transactions, granting 1 success and 1 overdraft rejection (`23514`), guaranteeing 0 negative stock.
 2. **Sequential Single-Session Idempotency Check (`supabase/tests/concurrency_test.sql` Section C):**
    - Explicitly documented as a sequential single-session logic test for cached deduplication, NOT an automated concurrency test.
-3. **Automated Two-Connection Concurrency Harness (`scripts/verifyConcurrencyHarness.ts`):**
+3. **Automated Two-Connection Concurrency & Security Harness (`scripts/verifyConcurrencyHarness.ts`):**
    - A programmatic Node.js harness using the `pg` library that instantiates two independent database clients (`client1` and `client2`).
-   - Concurrently executes transfers and reductions via `Promise.all` and `Promise.allSettled`.
-   - Checks environment connection strings and documents exact execution commands.
+   - **Transaction-Scoped Authentication Context:** Direct `pg` connections do not carry PostgREST JWT claims. The harness executes operations via `executeTx()`, setting transaction-scoped GUCs (`SET LOCAL ROLE`, `SET LOCAL "request.jwt.claims"`, `SET LOCAL "request.jwt.claim.role"`, `SET LOCAL "request.jwt.claim.sub"`). This cleanly isolates caller identities (`anon`, `customer`, `warehouse_manager`, `service_role`) without leaking between queries or weakening production RPC checks.
+   - **Ledger Invariant Protection:** Zero direct mutations (`UPDATE warehouse_stock`) bypass the ledger. All test inventory is initialized through authorized inventory RPCs (`rpc_record_stock_movement`), guaranteeing `warehouse_stock.quantity_on_hand = SUM(stock_movements.quantity_change)` at all times.
+   - **Test Isolation:** Exclusively provisions and targets dedicated test entities (`WH-TEST-CONCURRENCY-SRC`, `WH-TEST-CONCURRENCY-DST`, `cna-test-concurrency-prod`, and `CNA-TEST-CONCURRENCY`), leaving production seed data (`WH-CENTRAL`, 26 products, 46 SKUs, 296 units) completely pristine.
+   - Covers all 8 testing requirements: concurrent transfers, conflicting retries, concurrent reductions, overdraft rejection, single-movement idempotency, shelf conflicts, ledger reconciliation, and RLS security across roles.
 
 ### 9.10 Final Hardening: Key Length Limits & 5-Parameter Retry Validation (Migration 000007)
 - **Task 1 (Idempotency Key Length):** `stock_movements.idempotency_key` is `VARCHAR(100)`. Because `rpc_transfer_warehouse_stock` appends `:OUT` (4 characters) and `:IN` (3 characters) to the base key, an input key longer than 96 characters would cause a database string length overflow on insert (`100 - 4 = 96`). Migration 000007 enforces an upfront length check:

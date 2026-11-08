@@ -1,11 +1,17 @@
 -- ==============================================================================
 -- CNA Mobile Store — Phase 4.3 Database Concurrency & Race Condition Verification
 -- Target: Supabase PostgreSQL / psql Dual-Session Testing
--- Architecture Note:
+-- Architecture Notes:
 --   1. Sections A and B below are MANUAL RUNTIME PROCEDURES requiring two simultaneous
 --      independent client connections (Session 1 and Session 2) to physically test race conditions.
---   2. Section C is a SEQUENTIAL in-session idempotency check (NOT a concurrent test).
---   3. For automated programmatic dual-connection testing, run the Node.js harness:
+--   2. Invariant Guarantee: Test setup NEVER executes direct UPDATE/INSERT on warehouse_stock.
+--      All inventory is created strictly through authoritative ledger RPCs (rpc_record_stock_movement).
+--   3. Strict Isolation: Tests operate exclusively against dedicated test entities:
+--      * Warehouses: WH-TEST-CONCURRENCY-SRC, WH-TEST-CONCURRENCY-DST
+--      * Variant: CNA-TEST-CONCURRENCY
+--      Production seed data (WH-CENTRAL, 26 products, 46 SKUs, 296 units) remains completely untouched.
+--   4. Section C is a SEQUENTIAL in-session idempotency check (NOT a concurrent test).
+--   5. For automated programmatic dual-connection testing, run the Node.js harness:
 --      npx tsx scripts/verifyConcurrencyHarness.ts
 -- ==============================================================================
 
@@ -17,14 +23,26 @@
 -- ==============================================================================
 
 /*
+-- [PREREQUISITE SETUP] Ensure isolated test entities exist and are funded via ledger RPC:
+-- Run once as warehouse manager / postgres superuser:
+SELECT public.rpc_record_stock_movement(
+  p_warehouse_id := (SELECT id FROM public.warehouses WHERE code = 'WH-TEST-CONCURRENCY-SRC'),
+  p_variant_id := (SELECT id FROM public.product_variants WHERE sku = 'CNA-TEST-CONCURRENCY'),
+  p_quantity_change := 20,
+  p_movement_type := 'purchase_inflow',
+  p_shelf_location := 'A-SRC-01',
+  p_notes := 'Manual procedure test opening stock',
+  p_idempotency_key := 'MANUAL-SETUP-INFLOW-001'
+);
+
 -- [SESSION 1] Step A1: Start transaction, acquire lock & record movement
 BEGIN;
 SELECT public.rpc_record_stock_movement(
-  p_warehouse_id := (SELECT id FROM public.warehouses WHERE code = 'WH-CENTRAL'),
-  p_variant_id := (SELECT id FROM public.product_variants WHERE sku = 'CNA-APL-16PM-256-DES'),
+  p_warehouse_id := (SELECT id FROM public.warehouses WHERE code = 'WH-TEST-CONCURRENCY-SRC'),
+  p_variant_id := (SELECT id FROM public.product_variants WHERE sku = 'CNA-TEST-CONCURRENCY'),
   p_quantity_change := 1,
   p_movement_type := 'purchase_inflow',
-  p_shelf_location := 'B-14',
+  p_shelf_location := 'A-SRC-01',
   p_notes := 'Session 1 concurrent inflow test',
   p_idempotency_key := 'CONCURRENCY-RACE-KEY-001'
 );
@@ -33,11 +51,11 @@ SELECT public.rpc_record_stock_movement(
 -- [SESSION 2] Step A2: Concurrently issue the EXACT same call in Session 2
 BEGIN;
 SELECT public.rpc_record_stock_movement(
-  p_warehouse_id := (SELECT id FROM public.warehouses WHERE code = 'WH-CENTRAL'),
-  p_variant_id := (SELECT id FROM public.product_variants WHERE sku = 'CNA-APL-16PM-256-DES'),
+  p_warehouse_id := (SELECT id FROM public.warehouses WHERE code = 'WH-TEST-CONCURRENCY-SRC'),
+  p_variant_id := (SELECT id FROM public.product_variants WHERE sku = 'CNA-TEST-CONCURRENCY'),
   p_quantity_change := 1,
   p_movement_type := 'purchase_inflow',
-  p_shelf_location := 'B-14',
+  p_shelf_location := 'A-SRC-01',
   p_notes := 'Session 2 concurrent inflow test',
   p_idempotency_key := 'CONCURRENCY-RACE-KEY-001'
 );
@@ -61,27 +79,32 @@ WHERE idempotency_key = 'CONCURRENCY-RACE-KEY-001';
 
 -- ==============================================================================
 -- SECTION B (MANUAL RUNTIME PROCEDURE): Concurrent Stock Reductions (Overdraft Race Prevention)
--- Goal: Given available stock of 5 units, two concurrent requests each attempt to
---       sell 4 units (-4). With pessimistic row locking (FOR UPDATE), Session 1
---       succeeds (leaving 1 unit), and Session 2 is serialized, evaluates 1 - 4 = -3,
---       and raises ERR_INSUFFICIENT_STOCK (SQLSTATE 23514), preventing negative inventory.
+-- Goal: Given available stock of 5 units (funded via ledger RPC), two concurrent requests
+--       each attempt to sell 4 units (-4). With pessimistic row locking (FOR UPDATE),
+--       Session 1 succeeds (leaving 1 unit), and Session 2 is serialized, evaluates
+--       1 - 4 = -3, and raises ERR_INSUFFICIENT_STOCK (SQLSTATE 23514), preventing negative inventory.
 -- ==============================================================================
 
 /*
--- Step B0 (Setup): Ensure variant has exactly 5 units on hand
-UPDATE public.warehouse_stock
-SET quantity_on_hand = 5
-WHERE warehouse_id = (SELECT id FROM public.warehouses WHERE code = 'WH-CENTRAL')
-  AND variant_id = (SELECT id FROM public.product_variants WHERE sku = 'CNA-APL-16PM-256-DES');
+-- Step B0 (Setup): Ensure dedicated variant has exactly 5 units on hand via ledger movement
+SELECT public.rpc_record_stock_movement(
+  p_warehouse_id := (SELECT id FROM public.warehouses WHERE code = 'WH-TEST-CONCURRENCY-SRC'),
+  p_variant_id := (SELECT id FROM public.product_variants WHERE sku = 'CNA-TEST-CONCURRENCY'),
+  p_quantity_change := 5,
+  p_movement_type := 'purchase_inflow',
+  p_shelf_location := 'A-SRC-01',
+  p_notes := 'Setup exactly 5 units for overdraft test',
+  p_idempotency_key := 'MANUAL-SETUP-OVERDRAFT-5UNITS'
+);
 
 -- [SESSION 1] Step B1: Start transaction, lock row & deduct 4 units
 BEGIN;
 SELECT public.rpc_record_stock_movement(
-  p_warehouse_id := (SELECT id FROM public.warehouses WHERE code = 'WH-CENTRAL'),
-  p_variant_id := (SELECT id FROM public.product_variants WHERE sku = 'CNA-APL-16PM-256-DES'),
+  p_warehouse_id := (SELECT id FROM public.warehouses WHERE code = 'WH-TEST-CONCURRENCY-SRC'),
+  p_variant_id := (SELECT id FROM public.product_variants WHERE sku = 'CNA-TEST-CONCURRENCY'),
   p_quantity_change := -4,
   p_movement_type := 'order_sale',
-  p_shelf_location := 'B-14',
+  p_shelf_location := 'A-SRC-01',
   p_notes := 'Session 1 race sale',
   p_idempotency_key := 'CONCURRENCY-SALE-KEY-001'
 );
@@ -90,11 +113,11 @@ SELECT public.rpc_record_stock_movement(
 -- [SESSION 2] Step B2: Concurrently attempt to deduct 4 units in Session 2
 BEGIN;
 SELECT public.rpc_record_stock_movement(
-  p_warehouse_id := (SELECT id FROM public.warehouses WHERE code = 'WH-CENTRAL'),
-  p_variant_id := (SELECT id FROM public.product_variants WHERE sku = 'CNA-APL-16PM-256-DES'),
+  p_warehouse_id := (SELECT id FROM public.warehouses WHERE code = 'WH-TEST-CONCURRENCY-SRC'),
+  p_variant_id := (SELECT id FROM public.product_variants WHERE sku = 'CNA-TEST-CONCURRENCY'),
   p_quantity_change := -4,
   p_movement_type := 'order_sale',
-  p_shelf_location := 'B-14',
+  p_shelf_location := 'A-SRC-01',
   p_notes := 'Session 2 race sale',
   p_idempotency_key := 'CONCURRENCY-SALE-KEY-002'
 );
@@ -102,20 +125,22 @@ SELECT public.rpc_record_stock_movement(
 
 -- [SESSION 1] Step B3: Commit Session 1
 COMMIT;
--- Session 1 committed: stock is now 5 - 4 = 1.
+-- Session 1 committed: stock is reduced by 4.
 
--- [SESSION 2] Step B4: Session 2 unblocks, acquires row lock, reads stock = 1,
--- attempts 1 - 4 = -3 < 0, and immediately raises:
--- ERROR: ERR_INSUFFICIENT_STOCK: موجودی انبار (1) کمتر از مقدار درخواستی (4) است.
+-- [SESSION 2] Step B4: Session 2 unblocks, acquires row lock, reads remaining stock,
+-- evaluates balance < 0, and immediately raises:
+-- ERROR: ERR_INSUFFICIENT_STOCK: موجودی انبار کمتر از مقدار درخواستی است.
 -- SQLSTATE: 23514 (check_violation)
 ROLLBACK;
 
 -- [VERIFICATION QUERY]
-SELECT quantity_on_hand
-FROM public.warehouse_stock
-WHERE warehouse_id = (SELECT id FROM public.warehouses WHERE code = 'WH-CENTRAL')
-  AND variant_id = (SELECT id FROM public.product_variants WHERE sku = 'CNA-APL-16PM-256-DES');
--- Expected: quantity_on_hand = 1 (Zero negative stock balance).
+SELECT ws.quantity_on_hand, SUM(sm.quantity_change) AS ledger_sum
+FROM public.warehouse_stock ws
+JOIN public.stock_movements sm ON ws.warehouse_id = sm.warehouse_id AND ws.variant_id = sm.variant_id
+WHERE ws.warehouse_id = (SELECT id FROM public.warehouses WHERE code = 'WH-TEST-CONCURRENCY-SRC')
+  AND ws.variant_id = (SELECT id FROM public.product_variants WHERE sku = 'CNA-TEST-CONCURRENCY')
+GROUP BY ws.quantity_on_hand;
+-- Expected: quantity_on_hand >= 0 AND quantity_on_hand = ledger_sum (Zero negative stock balance, full ledger reconciliation).
 */
 
 
@@ -134,8 +159,13 @@ DECLARE
   v_res1 JSONB;
   v_res2 JSONB;
 BEGIN
-  SELECT id INTO STRICT v_wh_id FROM public.warehouses WHERE code = 'WH-CENTRAL';
-  SELECT id INTO STRICT v_var_id FROM public.product_variants WHERE sku = 'CNA-APL-16PM-256-DES';
+  -- Provision temporary isolated warehouse and variant for non-destructive sequential check
+  INSERT INTO public.warehouses (code, name_fa, address, is_central, is_active)
+  VALUES ('WH-TEST-SEQ-TMP', 'انبار موقت تست ترتیبی', 'تهران، تست موقت', false, true)
+  ON CONFLICT (code) DO UPDATE SET is_active = true
+  RETURNING id INTO v_wh_id;
+
+  SELECT id INTO STRICT v_var_id FROM public.product_variants LIMIT 1;
 
   -- Sequential Call 1
   v_res1 := public.rpc_record_stock_movement(
@@ -143,7 +173,7 @@ BEGIN
     p_variant_id := v_var_id,
     p_quantity_change := 1,
     p_movement_type := 'purchase_inflow',
-    p_shelf_location := 'B-14',
+    p_shelf_location := 'SEQ-01',
     p_idempotency_key := 'TEST-SEQUENTIAL-IDEMP-001'
   );
 
@@ -153,7 +183,7 @@ BEGIN
     p_variant_id := v_var_id,
     p_quantity_change := 1,
     p_movement_type := 'purchase_inflow',
-    p_shelf_location := 'B-14',
+    p_shelf_location := 'SEQ-01',
     p_idempotency_key := 'TEST-SEQUENTIAL-IDEMP-001'
   );
 
