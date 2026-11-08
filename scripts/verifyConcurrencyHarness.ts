@@ -167,36 +167,66 @@ async function cleanupHarnessFixtures(client: Client, registry: FixtureRegistry)
     }
   }
 
-  // 4. If no ledger movements were recorded for the run's warehouses (e.g. failure prior to Test 1),
-  // safe cleanup of catalog and warehouse fixtures is permitted.
+  // 4. Safe Catalog Fixture Cleanup (Strictly Zero Direct warehouse_stock Mutations)
+  // Inspect whether any stock projection rows or ledger movements reference the run-owned warehouse/variant fixtures.
   try {
     const whIds = registry.warehouses.map((w) => w.id);
-    if (whIds.length > 0) {
-      const { rows: movCheck } = await client.query(
-        `SELECT COUNT(*) AS count FROM public.stock_movements WHERE warehouse_id = ANY($1::uuid[]);`,
-        [whIds]
-      );
-      const movCount = parseInt(movCheck[0].count, 10);
+    const varIds = registry.variants.map((v) => v.id);
 
-      if (movCount === 0) {
-        // Zero movements recorded: safe to clean up catalog fixtures
-        for (const v of registry.variants) {
-          await client.query('DELETE FROM public.warehouse_stock WHERE variant_id = $1::uuid;', [v.id]);
-          await client.query('DELETE FROM public.product_variants WHERE id = $1::uuid;', [v.id]);
-        }
-        for (const p of registry.products) {
-          await client.query('DELETE FROM public.products WHERE id = $1::uuid;', [p.id]);
-        }
-        for (const w of registry.warehouses) {
-          await client.query('DELETE FROM public.warehouses WHERE id = $1::uuid;', [w.id]);
-        }
-        console.log('[Cleanup] Unused catalog fixtures safely removed (zero ledger movements existed).');
-      } else {
+    if (whIds.length > 0 || varIds.length > 0) {
+      // Check ledger movements referencing run-owned warehouses or variants
+      const { rows: movCheck } = await client.query(
+        `SELECT COUNT(*) AS count
+         FROM public.stock_movements
+         WHERE warehouse_id = ANY($1::uuid[]) OR variant_id = ANY($2::uuid[]);`,
+        [whIds, varIds]
+      );
+      const ledgerMovCount = parseInt(movCheck[0].count, 10);
+
+      // Check stock projection rows referencing run-owned warehouses or variants
+      const { rows: projCheck } = await client.query(
+        `SELECT COUNT(*) AS count
+         FROM public.warehouse_stock
+         WHERE warehouse_id = ANY($1::uuid[]) OR variant_id = ANY($2::uuid[]);`,
+        [whIds, varIds]
+      );
+      const projectionCount = parseInt(projCheck[0].count, 10);
+
+      if (ledgerMovCount > 0) {
+        // Case A: Ledger movements exist
+        // By database design (trigger trg_prevent_stock_movement_update_delete & ON DELETE RESTRICT),
+        // immutable ledger records and their parent catalog fixtures (warehouses, variants, products)
+        // must be preserved. We NEVER delete stock_movements or mutate warehouse_stock directly.
         console.log(
-          `[Cleanup] Ledger Notice: ${movCount} immutable stock movements exist for this run. ` +
+          `[Cleanup] Ledger Preservation: ${ledgerMovCount} immutable stock movements and ${projectionCount} projection rows exist for this run. ` +
           `By design (trg_prevent_stock_movement_update_delete & ON DELETE RESTRICT), ` +
           `these records and their parent warehouses/variants are preserved under unique namespace '${registry.runToken}' and will never be reused.`
         );
+      } else if (projectionCount > 0) {
+        // Case B: Projection records exist without ledger movements (Anomaly)
+        // Report explicit cleanup anomaly and preserve the affected records without direct mutation.
+        console.warn(
+          `[Cleanup Anomaly] Detected ${projectionCount} warehouse_stock projection row(s) with 0 associated stock_movements for run '${registry.runToken}'. ` +
+          `Under strict projection immutability rules, warehouse_stock cannot be directly deleted outside RPCs. ` +
+          `Preserving affected variant and warehouse fixtures for diagnostic review.`
+        );
+      } else {
+        // Case C: Neither ledger movements nor stock projections exist (e.g. failure before any inventory RPC)
+        // Safe to prove no stock projection or ledger record references them.
+        // Clean up catalog fixtures in reverse foreign-key order: variants -> products -> warehouses.
+        for (const v of registry.variants) {
+          await client.query('DELETE FROM public.product_variants WHERE id = $1::uuid;', [v.id]);
+          console.log(`[Cleanup] Deleted unused test variant: ${v.sku} (${v.id})`);
+        }
+        for (const p of registry.products) {
+          await client.query('DELETE FROM public.products WHERE id = $1::uuid;', [p.id]);
+          console.log(`[Cleanup] Deleted unused test product: ${p.slug} (${p.id})`);
+        }
+        for (const w of registry.warehouses) {
+          await client.query('DELETE FROM public.warehouses WHERE id = $1::uuid;', [w.id]);
+          console.log(`[Cleanup] Deleted unused test warehouse: ${w.code} (${w.id})`);
+        }
+        console.log('[Cleanup] Unused catalog fixtures safely removed (zero ledger movements and zero stock projections existed).');
       }
     }
   } catch (err) {
@@ -277,9 +307,9 @@ async function runConcurrencyHarness() {
       throw new Error(`Generated variant SKU exceeds VARCHAR(100) limit: ${testVariantSku}`);
     }
 
-    // 0.2 Collision Pre-Check: Verify all generated identifiers are completely unused
-    console.log('[Fixture Provisioning] Running collision pre-check on generated identifiers...');
-    const collisionChecks = await Promise.all([
+    // 0.2 Collision Pre-Check: Verify all generated catalog and warehouse identifiers are completely unused
+    console.log('[Fixture Provisioning] Running collision pre-check on generated catalog identifiers...');
+    const catalogCollisionChecks = await Promise.all([
       client1.query(`SELECT code FROM public.warehouses WHERE code IN ($1, $2);`, [srcWhCode, dstWhCode]),
       client1.query(`SELECT slug FROM public.products WHERE slug = $1;`, [testProdSlug]),
       client1.query(`SELECT sku FROM public.product_variants WHERE sku IN ($1, $2, $3);`, [
@@ -287,24 +317,20 @@ async function runConcurrencyHarness() {
         reduceVariantSku,
         authVariantSku,
       ]),
-      client1.query(`SELECT id FROM public.profiles WHERE id IN ($1::uuid, $2::uuid);`, [
-        testManagerId,
-        testCustomerId,
-      ]),
     ]);
 
-    for (const check of collisionChecks) {
+    for (const check of catalogCollisionChecks) {
       if (check.rows.length > 0) {
         throw new Error(
-          `[Fixture Collision] Generated identifier already exists in database! Pre-check failed closed: ${JSON.stringify(
+          `[Fixture Collision] Generated catalog identifier already exists in database! Pre-check failed closed: ${JSON.stringify(
             check.rows
           )}`
         );
       }
     }
-    console.log('[Fixture Provisioning] Collision pre-check passed: All identifiers are completely unique.');
+    console.log('[Fixture Provisioning] Catalog collision pre-check passed: All warehouse codes, slugs, and SKUs are completely unique.');
 
-    // 0.3 Safe Test Identity Provisioning (Issue 1: Fail Closed)
+    // 0.3 Safe Test Identity Provisioning (Issue 1: Fail Closed with Explicit Auth Collision Checks)
     // Verify system role 'warehouse_manager' exists before doing anything
     const { rows: roleRows } = await client1.query(
       `SELECT id FROM public.auth_roles WHERE name = 'warehouse_manager';`
@@ -316,7 +342,7 @@ async function runConcurrencyHarness() {
     }
     const warehouseManagerRoleId = roleRows[0].id;
 
-    // Check if auth.users table is present in the database
+    // Check if auth.users table is present in the database (fail closed if unavailable)
     const { rows: authTableRows } = await client1.query(`
       SELECT EXISTS (
         SELECT 1 FROM information_schema.tables
@@ -324,52 +350,92 @@ async function runConcurrencyHarness() {
       ) AS exists;
     `);
     const authUsersTableExists = authTableRows[0].exists;
+    if (!authUsersTableExists) {
+      throw new Error(
+        'Precondition Failed: Required table "auth.users" does not exist in schema "auth". ' +
+        'Safe test identity provisioning and privilege isolation cannot be guaranteed. Failing closed.'
+      );
+    }
 
-    // Acquire transaction-scoped advisory lock during user setup to eliminate race conditions between concurrent runs
+    // Acquire transaction-scoped advisory lock during user setup to serialize concurrent harness runs
     await client1.query('BEGIN;');
     try {
-      await client1.query(`SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext('cna_harness_identity_provisioning'));`);
+      await client1.query(
+        `SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext('cna_harness_identity_provisioning'));`
+      );
 
-      if (authUsersTableExists) {
-        // Inspect available columns in auth.users to construct a safe, compliant insert
-        const { rows: colRows } = await client1.query(`
-          SELECT column_name FROM information_schema.columns
-          WHERE table_schema = 'auth' AND table_name = 'users';
-        `);
-        const authCols = new Set(colRows.map((r) => r.column_name));
+      // Explicit Auth Collision Checks: verify generated UUID and email are unused in auth.users and profiles
+      console.log('[Fixture Provisioning] Running explicit auth identity collision pre-checks...');
 
-        const hasInstanceId = authCols.has('instance_id');
-        const hasAud = authCols.has('aud');
-        const hasRole = authCols.has('role');
-        const hasRawAppMeta = authCols.has('raw_app_meta_data');
-        const hasRawUserMeta = authCols.has('raw_user_meta_data');
-
-        const insertUserSql = `
-          INSERT INTO auth.users (
-            id, email
-            ${hasInstanceId ? ', instance_id' : ''}
-            ${hasAud ? ', aud' : ''}
-            ${hasRole ? ', role' : ''}
-            ${hasRawAppMeta ? ', raw_app_meta_data' : ''}
-            ${hasRawUserMeta ? ', raw_user_meta_data' : ''}
-          )
-          VALUES (
-            $1::uuid, $2
-            ${hasInstanceId ? ", '00000000-0000-0000-0000-000000000000'::uuid" : ''}
-            ${hasAud ? ", 'authenticated'" : ''}
-            ${hasRole ? ", 'authenticated'" : ''}
-            ${hasRawAppMeta ? ", '{\"provider\":\"email\",\"providers\":[\"email\"]}'::jsonb" : ''}
-            ${hasRawUserMeta ? ", '{}'::jsonb" : ''}
-          )
-          RETURNING id;
-        `;
-
-        await client1.query(insertUserSql, [testManagerId, managerEmail]);
-        registry.users.push({ id: testManagerId, email: managerEmail, createdInAuth: true });
-
-        await client1.query(insertUserSql, [testCustomerId, customerEmail]);
-        registry.users.push({ id: testCustomerId, email: customerEmail, createdInAuth: true });
+      const { rows: authIdCollisions } = await client1.query(
+        `SELECT id FROM auth.users WHERE id IN ($1::uuid, $2::uuid);`,
+        [testManagerId, testCustomerId]
+      );
+      if (authIdCollisions.length > 0) {
+        throw new Error(
+          `[Auth Collision] Generated test UUID already exists in auth.users.id: ${authIdCollisions.map((r) => r.id).join(', ')}`
+        );
       }
+
+      const { rows: authEmailCollisions } = await client1.query(
+        `SELECT email FROM auth.users WHERE email IN ($1, $2);`,
+        [managerEmail, customerEmail]
+      );
+      if (authEmailCollisions.length > 0) {
+        throw new Error(
+          `[Auth Collision] Generated test email already exists in auth.users.email: ${authEmailCollisions.map((r) => r.email).join(', ')}`
+        );
+      }
+
+      const { rows: profileCollisions } = await client1.query(
+        `SELECT id FROM public.profiles WHERE id IN ($1::uuid, $2::uuid);`,
+        [testManagerId, testCustomerId]
+      );
+      if (profileCollisions.length > 0) {
+        throw new Error(
+          `[Profile Collision] Generated test UUID already exists in public.profiles.id: ${profileCollisions.map((r) => r.id).join(', ')}`
+        );
+      }
+      console.log('[Fixture Provisioning] Auth collision pre-checks passed: auth.users.id, auth.users.email, and public.profiles.id are completely unused.');
+
+      // Inspect available columns in auth.users to construct a safe, compliant insert
+      const { rows: colRows } = await client1.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_schema = 'auth' AND table_name = 'users';
+      `);
+      const authCols = new Set(colRows.map((r) => r.column_name));
+
+      const hasInstanceId = authCols.has('instance_id');
+      const hasAud = authCols.has('aud');
+      const hasRole = authCols.has('role');
+      const hasRawAppMeta = authCols.has('raw_app_meta_data');
+      const hasRawUserMeta = authCols.has('raw_user_meta_data');
+
+      const insertUserSql = `
+        INSERT INTO auth.users (
+          id, email
+          ${hasInstanceId ? ', instance_id' : ''}
+          ${hasAud ? ', aud' : ''}
+          ${hasRole ? ', role' : ''}
+          ${hasRawAppMeta ? ', raw_app_meta_data' : ''}
+          ${hasRawUserMeta ? ', raw_user_meta_data' : ''}
+        )
+        VALUES (
+          $1::uuid, $2
+          ${hasInstanceId ? ", '00000000-0000-0000-0000-000000000000'::uuid" : ''}
+          ${hasAud ? ", 'authenticated'" : ''}
+          ${hasRole ? ", 'authenticated'" : ''}
+          ${hasRawAppMeta ? ", '{\"provider\":\"email\",\"providers\":[\"email\"]}'::jsonb" : ''}
+          ${hasRawUserMeta ? ", '{}'::jsonb" : ''}
+        )
+        RETURNING id;
+      `;
+
+      await client1.query(insertUserSql, [testManagerId, managerEmail]);
+      registry.users.push({ id: testManagerId, email: managerEmail, createdInAuth: true });
+
+      await client1.query(insertUserSql, [testCustomerId, customerEmail]);
+      registry.users.push({ id: testCustomerId, email: customerEmail, createdInAuth: true });
 
       // Insert profiles for both test accounts
       await client1.query(
@@ -382,7 +448,12 @@ async function runConcurrencyHarness() {
       registry.profiles.push({ id: testManagerId }, { id: testCustomerId });
 
       // Attach warehouse_manager role ONLY to the newly created manager account
-      // Guaranteed safe: identity was positively established and exclusively owned by this run
+      // Guaranteed safe: identity was positively established and exclusively registered by this run
+      const isRegisteredManager = registry.users.some((u) => u.id === testManagerId && u.createdInAuth);
+      if (!isRegisteredManager) {
+        throw new Error('[Safety Violation] Attempted to assign warehouse_manager role to an unverified user ID!');
+      }
+
       await client1.query(
         `INSERT INTO public.auth_user_roles (user_id, role_id)
          VALUES ($1::uuid, $2::uuid)

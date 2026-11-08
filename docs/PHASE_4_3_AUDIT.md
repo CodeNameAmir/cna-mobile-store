@@ -290,15 +290,20 @@ To avoid ambiguity between sequential in-session execution and real concurrent i
 ### 9.12 Critical Phase 4.3 Test Harness Isolation & Safety Remediation (`scripts/verifyConcurrencyHarness.ts`)
 Prior to staging deployment, a critical security and isolation audit of the automated two-connection test harness identified six vulnerabilities and architectural requirements, which have been comprehensively resolved:
 
-1. **Elimination of Fixed Test-User IDs & Privilege Escalation Prevention (Issue 1):**
+1. **Elimination of Fixed Test-User IDs, Explicit Auth Collision Checks & Privilege Escalation Prevention (Issue 1):**
    - **Vulnerability:** The harness previously used static UUIDs (`00000000-0000-0000-0000-0000000000aa` and `...00bb`). Inserting these IDs with `ON CONFLICT DO NOTHING` and subsequently attaching the `warehouse_manager` role meant that if a static UUID happened to match an existing user, that real user would be silently granted warehouse management privileges.
    - **Remediation:**
      - Completely eliminated static test-user UUIDs.
-     - Dynamically generates unique UUIDs (`crypto.randomUUID()`) and unique email addresses per harness run.
-     - Performs upfront pre-checks asserting that generated IDs and emails do not exist in `auth.users` or `public.profiles`.
-     - Injects into `auth.users` (if table exists) and `public.profiles` using clean `INSERT` statements (zero `ON CONFLICT DO UPDATE/DO NOTHING`).
-     - Attaches `warehouse_manager` role exclusively to the freshly created, run-owned manager identity.
-     - Fails closed immediately if safe identity provisioning cannot be guaranteed.
+     - Dynamically generates unique UUIDs (`crypto.randomUUID()`) and unique email addresses (`test-mgr-<token>@concurrency.test`, `test-cust-<token>@concurrency.test`) per harness run.
+     - Enforces a fail-closed check verifying that `auth.users` exists in the database before proceeding.
+     - Acquires a **transaction-scoped advisory lock** (`pg_catalog.pg_advisory_xact_lock(hashtext('cna_harness_identity_provisioning'))`) to serialize concurrent identity provisioning across parallel harness processes.
+     - Performs explicit parameterized collision checks:
+       * Queries `auth.users.id` for generated UUIDs (`SELECT id FROM auth.users WHERE id IN ($1::uuid, $2::uuid)`).
+       * Queries `auth.users.email` for generated emails (`SELECT email FROM auth.users WHERE email IN ($1, $2)`).
+       * Queries `public.profiles.id` for generated UUIDs (`SELECT id FROM public.profiles WHERE id IN ($1::uuid, $2::uuid)`).
+     - Injects into `auth.users` and `public.profiles` using clean parameterized `INSERT` statements (zero `ON CONFLICT DO UPDATE/DO NOTHING`). PostgreSQL unique constraints serve as the final backstop against race conditions.
+     - Attaches `warehouse_manager` role exclusively to the freshly created, run-owned manager identity, verifying that the manager was registered in the current run's registry before assignment.
+     - Fails closed immediately on any collision or pre-check failure.
 
 2. **Genuinely Isolated Fixtures & Database Constraint Compliance (Issue 2):**
    - **Vulnerability:** The harness previously used hardcoded codes (`WH-TEST-CONCURRENCY-SRC`, `cna-test-concurrency-prod`, `CNA-TEST-CONCURRENCY`) with `ON CONFLICT DO UPDATE` which could overwrite existing entities, and `WH-TEST-CONCURRENCY-SRC` (23 chars) violated `warehouses.code VARCHAR(20)`. Repeated runs also accumulated inventory.
@@ -313,13 +318,16 @@ Prior to staging deployment, a critical security and isolation audit of the auto
      - Pre-checks confirm all generated identifiers are unused prior to insertion; aborts safely on any collision.
      - Structured `FixtureRegistry` tracks every provisioned warehouse, product, variant, user, profile, and role assignment.
 
-3. **Immutable Ledger-Aware Safe Cleanup Strategy (Issue 2 & 4):**
-   - **Vulnerability:** Blind cleanup scripts that attempt `DELETE FROM stock_movements` fail because of the immutable ledger trigger (`trg_prevent_stock_movement_update_delete`), while deleting warehouses or variants fails due to `ON DELETE RESTRICT` foreign keys.
+3. **Immutable Ledger-Aware Safe Cleanup Strategy & Zero Direct Projection Mutations (Issue 2 & 4):**
+   - **Vulnerability:** Blind cleanup scripts that attempt `DELETE FROM stock_movements` fail because of the immutable ledger trigger (`trg_prevent_stock_movement_update_delete`), while direct statements like `DELETE FROM warehouse_stock` violate the principle that inventory projections must not be mutated outside authoritative RPCs.
    - **Remediation:**
+     - Strictly eliminates all direct `INSERT`, `UPDATE`, or `DELETE` statements on `public.warehouse_stock` and `public.stock_movements`.
      - In the `finally` block, `cleanupHarnessFixtures()` safely removes created role assignments, profiles, and `auth.users` records in reverse foreign-key order.
-     - If no movements were recorded (e.g. failure before Test 1), unused catalog fixtures are safely deleted.
-     - If ledger movements were recorded, the harness respects the database trigger and `ON DELETE RESTRICT` constraints: ledger movements and their parent test warehouses/variants are preserved under their unique run token namespace and will NEVER be reused.
-     - Never mutates `warehouse_stock` directly during cleanup.
+     - Before attempting catalog fixture cleanup, inspects both `public.stock_movements` and `public.warehouse_stock` for references to run-owned warehouse and variant UUIDs:
+       * *Ledger movements exist:* Respects the immutable ledger trigger (`trg_prevent_stock_movement_update_delete`) and foreign key `ON DELETE RESTRICT` constraints. Ledger records and their parent catalog fixtures are safely preserved under their unique run token namespace and will NEVER be reused.
+       * *Projection records exist without ledger movements (Anomaly):* Emits an explicit cleanup anomaly warning and preserves the affected fixtures without direct mutation.
+       * *Zero ledger movements and zero stock projections:* Safely removes unused catalog fixtures in strict reverse foreign-key order (`product_variants` -> `products` -> `warehouses`).
+     - Idempotent and safe to execute following partial test failures.
 
 4. **Explicit Warehouse Manager Positive & Customer Negative Authorization Test (Issue 3):**
    - **Remediation:** Added a dedicated dual-assertion authorization suite (Test 8):
