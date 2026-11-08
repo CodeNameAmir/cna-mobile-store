@@ -3,6 +3,10 @@
 -- Domain: Storefront Compatible View & Supabase Storage Bucket Integration
 -- ==============================================================================
 
+-- 0. Ensure product_variants has part_number column for view projection
+ALTER TABLE public.product_variants
+ADD COLUMN IF NOT EXISTS part_number VARCHAR(50) DEFAULT NULL;
+
 -- 1. Storefront Products Aggregation View (Security Invoker)
 CREATE OR REPLACE VIEW public.v_storefront_products
 WITH (security_invoker = true)

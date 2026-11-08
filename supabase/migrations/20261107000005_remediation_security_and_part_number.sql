@@ -69,7 +69,8 @@ USING (public.user_has_permission('inventory:read') OR public.user_has_role('sup
 -- internal physical shelf locations, warehouse IDs, reserved quantities, or cost prices.
 -- ==============================================================================
 
-CREATE OR REPLACE VIEW public.v_storefront_products
+DROP VIEW IF EXISTS public.v_storefront_products CASCADE;
+CREATE VIEW public.v_storefront_products
 AS
 SELECT
   p.id::text AS id,
