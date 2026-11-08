@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Phone, Mail, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Phone, Mail, CheckCircle2, AlertTriangle, GitCommit } from 'lucide-react';
 import { CNA_LOGO } from '../../services/mockData';
 import { TrustBadges } from './TrustBadges';
+import { getBuildInfo, formatPersianDateTime } from '../../utils/buildInfo';
 
 export const Footer: React.FC = () => {
   const [newsletterInput, setNewsletterInput] = useState('');
@@ -164,10 +165,27 @@ export const Footer: React.FC = () => {
           </div>
         </div>
 
-        {/* Bottom Legal Copyright */}
+        {/* Bottom Legal Copyright & Build Info */}
         <div className="pt-6 mt-4 border-t border-slate-200 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-slate-500">
           <p>© ۱۴۰۳ تمامی حقوق مادی و معنوی این وب‌سایت متعلق به فروشگاه سی‌ان‌ای موبایل است.</p>
-          <p className="text-[11px]">طراحی و توسعه با بالاترین استاندارد رابط کاربری React & Tailwind CSS</p>
+          
+          {/* Temporary Build Indicator */}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('open-build-badge'))}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-200/60 hover:bg-slate-200 text-slate-600 hover:text-slate-800 transition-colors text-[11px] font-mono cursor-pointer"
+            title="کلیک برای مشاهده جزئیات کامل بیلد و کامیت"
+          >
+            <GitCommit className="w-3.5 h-3.5 text-blue-600" />
+            <span>بیلد:</span>
+            <span className="font-bold text-slate-800">{getBuildInfo().commitSha}</span>
+            <span className="text-slate-400">|</span>
+            <span className="font-sans text-[10px] text-slate-500">
+              بروزرسانی: {formatPersianDateTime(getBuildInfo().buildTime).split('،')[0]}
+            </span>
+          </button>
+
+          <p className="text-[11px]">طراحی و توسعه با استانداردهای React & Tailwind CSS</p>
         </div>
       </div>
     </footer>

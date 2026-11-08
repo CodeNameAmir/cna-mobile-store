@@ -12,6 +12,8 @@ import { CatalogPage } from './pages/CatalogPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { CartPage } from './pages/CartPage';
 import { CheckoutPage } from './pages/CheckoutPage';
+// [TEMPORARY] Build & Commit status indicator badge
+import { BuildInfoBadge } from './components/ui/BuildInfoBadge';
 
 // Admin Panel Pages & Layout
 import { AdminLayout } from './components/admin/AdminLayout';
@@ -151,6 +153,8 @@ export default function App() {
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          {/* [TEMPORARY] Floating Build & Commit Diagnostics Badge (easily removable) */}
+          <BuildInfoBadge />
         </CartProvider>
       </AdminDataProvider>
     </HashRouter>

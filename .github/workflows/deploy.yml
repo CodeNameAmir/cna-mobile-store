@@ -35,6 +35,8 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || '' }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || '' }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || '' }}
+          VITE_COMMIT_SHA: ${{ github.sha }}
+          VITE_COMMIT_REF: ${{ github.ref_name }}
         run: |
           npm ci --legacy-peer-deps || npm install --legacy-peer-deps
           npm run build
