@@ -30,6 +30,11 @@ jobs:
           node-version: 22
 
       - name: Install dependencies and Build
+        env:
+          VITE_DATA_SOURCE: ${{ secrets.VITE_DATA_SOURCE || 'mock' }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || '' }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || '' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || '' }}
         run: |
           npm ci --legacy-peer-deps || npm install --legacy-peer-deps
           npm run build
