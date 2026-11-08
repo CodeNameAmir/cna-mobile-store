@@ -1,5 +1,5 @@
 /**
- * CNA Mobile Store — Automated Two-Connection Concurrency & Security Harness
+ * CNA Mobile Store — Automated Two-Connection Concurrency & Database Security Harness
  * 
  * Verifies real multi-client database behaviors across two independent PostgreSQL connections:
  *   1. Concurrent identical transfer requests (advisory lock serialization)
@@ -8,8 +8,8 @@
  *   4. Insufficient stock overdraft rejection (ERRCODE 23514)
  *   5. Single-movement idempotency (cached duplicate recognition)
  *   6. Shelf-location conflict rejection (ERRCODE 23505)
- *   7. Full inventory ledger reconciliation (quantity_on_hand = SUM(quantity_change))
- *   8. PostgREST JWT authentication & RLS security across anon, customer, manager, and service_role
+ *   7. Full inventory ledger reconciliation (quantity_on_hand = SUM(quantity_change) via FULL OUTER JOIN)
+ *   8. PostgreSQL Role, JWT Context, and RLS Verification across anon, customer, manager, and service_role
  *
  * Rules:
  *   - Strictly isolated to dedicated test entities:
@@ -31,33 +31,71 @@ interface AuthContext {
   email?: string;
 }
 
+const ALLOWED_DATABASE_ROLES = new Set<string>(['anon', 'authenticated', 'service_role']);
+
 const TEST_MANAGER_ID = '00000000-0000-0000-0000-0000000000aa';
 const TEST_CUSTOMER_ID = '00000000-0000-0000-0000-0000000000bb';
 
+/**
+ * Executes a callback within a transaction initialized with simulated PostgREST JWT context.
+ *
+ * Architectural Note on Session Setup:
+ * 1. SET LOCAL ROLE <role>:
+ *    PostgreSQL does not support parameterizing the target role in `SET ROLE $1`.
+ *    Therefore, we strictly validate the role against `ALLOWED_DATABASE_ROLES` before interpolation.
+ *    Setting the role establishes table-level (GRANT/REVOKE) privileges, column-level privileges,
+ *    and default RLS evaluation context.
+ *
+ * 2. Parameterized set_config('request.jwt.claims', $1, true):
+ *    PostgREST injects caller claims into session GUCs within each request transaction.
+ *    Using PostgreSQL's built-in `set_config(name, value, is_local = true)` with parameterized bindings
+ *    completely prevents SQL injection, escaping defects, and raw string concatenation while scoping
+ *    the configuration strictly to the current transaction.
+ *
+ * 3. Safe Rollback:
+ *    If an error occurs in the query block, `ROLLBACK;` is attempted safely, and the original error
+ *    is re-thrown without being masked by any rollback failure.
+ */
 async function executeTx<T>(
   client: Client,
   authCtx: AuthContext,
   queryBlock: (txClient: Client) => Promise<T>
 ): Promise<T> {
+  if (!ALLOWED_DATABASE_ROLES.has(authCtx.role)) {
+    throw new Error(
+      `[executeTx] Invalid or unapproved database role: '${authCtx.role}'. Must be one of: ${Array.from(ALLOWED_DATABASE_ROLES).join(', ')}`
+    );
+  }
+
   await client.query('BEGIN;');
   try {
+    // 1. Set transaction-local PostgreSQL role (validated via allowlist)
     await client.query(`SET LOCAL ROLE ${authCtx.role};`);
+
+    // 2. Safely inject simulated PostgREST JWT claims via parameterized set_config
     const jwtClaims = JSON.stringify({
       role: authCtx.role,
       sub: authCtx.sub || null,
       email: authCtx.email || null,
     });
-    await client.query(`SET LOCAL "request.jwt.claims" = '${jwtClaims}';`);
-    await client.query(`SET LOCAL "request.jwt.claim.role" = '${authCtx.role}';`);
+    await client.query(`SELECT pg_catalog.set_config('request.jwt.claims', $1, true);`, [jwtClaims]);
+    await client.query(`SELECT pg_catalog.set_config('request.jwt.claim.role', $1, true);`, [authCtx.role]);
     if (authCtx.sub) {
-      await client.query(`SET LOCAL "request.jwt.claim.sub" = '${authCtx.sub}';`);
+      await client.query(`SELECT pg_catalog.set_config('request.jwt.claim.sub', $1, true);`, [authCtx.sub]);
+    }
+    if (authCtx.email) {
+      await client.query(`SELECT pg_catalog.set_config('request.jwt.claim.email', $1, true);`, [authCtx.email]);
     }
 
     const result = await queryBlock(client);
     await client.query('COMMIT;');
     return result;
   } catch (err) {
-    await client.query('ROLLBACK;');
+    try {
+      await client.query('ROLLBACK;');
+    } catch (rollbackErr) {
+      console.error('[executeTx] Safe rollback failed:', rollbackErr);
+    }
     throw err;
   }
 }
@@ -66,7 +104,7 @@ async function runConcurrencyHarness() {
   const dbUrl = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
 
   console.log('======================================================================');
-  console.log('>>> [CNA Mobile Store] Pre-Staging Concurrency & Security Harness');
+  console.log('>>> [CNA Mobile Store] Pre-Staging Concurrency & Database Security Harness');
   console.log('======================================================================');
 
   if (!dbUrl) {
@@ -443,34 +481,105 @@ async function runConcurrencyHarness() {
     }
 
     // -------------------------------------------------------------------------
-    // TEST 7: Inventory Ledger Reconciliation Invariant
+    // TEST 7: Inventory Ledger Reconciliation Invariant (FULL OUTER JOIN)
     // -------------------------------------------------------------------------
     console.log('\n--- 7. Testing Inventory Ledger Reconciliation Invariant ---');
-    const { rows: reconRows } = await client1.query(`
+    // Using FULL OUTER JOIN between warehouse_stock projection and stock_movements ledger totals.
+    // Parameterized with dedicated test warehouse UUIDs to ensure complete isolation.
+    const reconciliationQuery = `
+      WITH ledger_totals AS (
+        SELECT
+          warehouse_id,
+          variant_id,
+          SUM(quantity_change) AS ledger_sum,
+          COUNT(*) AS movement_count
+        FROM public.stock_movements
+        WHERE warehouse_id IN ($1::uuid, $2::uuid)
+        GROUP BY warehouse_id, variant_id
+      ),
+      projection AS (
+        SELECT
+          warehouse_id,
+          variant_id,
+          quantity_on_hand AS projection_stock
+        FROM public.warehouse_stock
+        WHERE warehouse_id IN ($1::uuid, $2::uuid)
+      )
       SELECT
-        ws.warehouse_id,
-        ws.variant_id,
-        ws.quantity_on_hand AS projection_stock,
-        COALESCE(SUM(sm.quantity_change), 0) AS ledger_sum,
-        (ws.quantity_on_hand = COALESCE(SUM(sm.quantity_change), 0)) AS is_reconciled
-      FROM public.warehouse_stock ws
-      LEFT JOIN public.stock_movements sm 
-        ON ws.warehouse_id = sm.warehouse_id AND ws.variant_id = sm.variant_id
-      WHERE ws.warehouse_id IN ('${srcWhId}', '${dstWhId}')
-      GROUP BY ws.warehouse_id, ws.variant_id, ws.quantity_on_hand;
-    `);
+        COALESCE(p.warehouse_id, l.warehouse_id) AS warehouse_id,
+        COALESCE(p.variant_id, l.variant_id) AS variant_id,
+        p.projection_stock,
+        COALESCE(l.ledger_sum, 0) AS ledger_sum,
+        COALESCE(l.movement_count, 0) AS movement_count,
+        (p.warehouse_id IS NOT NULL AND l.warehouse_id IS NOT NULL AND p.projection_stock = COALESCE(l.ledger_sum, 0)) AS is_reconciled
+      FROM projection p
+      FULL OUTER JOIN ledger_totals l
+        ON p.warehouse_id = l.warehouse_id AND p.variant_id = l.variant_id;
+    `;
 
-    for (const r of reconRows) {
-      if (!r.is_reconciled) {
-        throw new Error(`Test 7 Failed: Ledger discrepancy detected! Projection: ${r.projection_stock}, Ledger: ${r.ledger_sum}`);
+    const { rows: reconRows } = await client1.query(reconciliationQuery, [srcWhId, dstWhId]);
+
+    // Problem 1 Prevention: Assert non-empty result set and presence of all expected combinations
+    if (!reconRows || reconRows.length === 0) {
+      throw new Error('Test 7 Failed: Ledger reconciliation returned 0 rows! Expected test inventory combinations were not found.');
+    }
+
+    if (reconRows.length < 3) {
+      throw new Error(`Test 7 Failed: Expected at least 3 test inventory combinations in reconciliation, found only ${reconRows.length}.`);
+    }
+
+    const expectedCombinations = [
+      { wh: srcWhId, variant: testVariantId, label: 'Source WH + Test Variant (after inflow & transfer out)' },
+      { wh: dstWhId, variant: testVariantId, label: 'Destination WH + Test Variant (after transfer in)' },
+      { wh: srcWhId, variant: reduceVariantId, label: 'Source WH + Reduction Variant (after inflow & sale reduction)' },
+    ];
+
+    for (const exp of expectedCombinations) {
+      const match = reconRows.find(
+        (r) => r.warehouse_id === exp.wh && r.variant_id === exp.variant
+      );
+      if (!match) {
+        throw new Error(`Test 7 Failed: Expected test combination missing from reconciliation results: ${exp.label} (${exp.wh}, ${exp.variant})`);
       }
     }
-    console.log(`✓ [Test 7 Passed] Ledger invariant verified: projection strictly equals ledger sum across ${reconRows.length} test inventory rows.`);
+
+    // Problem 2 Prevention: Detect orphan projection or orphan ledger rows and verify reconciliation
+    for (const r of reconRows) {
+      if (r.projection_stock === null || r.projection_stock === undefined) {
+        throw new Error(
+          `Test 7 Failed: Orphan ledger movement detected without corresponding warehouse_stock row! Warehouse: ${r.warehouse_id}, Variant: ${r.variant_id}, Ledger Sum: ${r.ledger_sum}`
+        );
+      }
+      if (r.movement_count === 0 || r.movement_count === '0') {
+        throw new Error(
+          `Test 7 Failed: Orphan warehouse_stock projection row detected without any ledger movements! Warehouse: ${r.warehouse_id}, Variant: ${r.variant_id}, Stock: ${r.projection_stock}`
+        );
+      }
+      if (!r.is_reconciled) {
+        throw new Error(
+          `Test 7 Failed: Ledger discrepancy detected! Warehouse: ${r.warehouse_id}, Variant: ${r.variant_id}, Projection: ${r.projection_stock}, Ledger: ${r.ledger_sum}, Movements: ${r.movement_count}`
+        );
+      }
+    }
+    console.log(`✓ [Test 7 Passed] Ledger invariant strictly reconciled: FULL OUTER JOIN confirmed projection === ledger sum across ${reconRows.length} test inventory combinations.`);
 
     // -------------------------------------------------------------------------
-    // TEST 8: PostgREST JWT Authentication & Security Behavior
+    // TEST 8: Database Authorization, Simulated JWT Context & RLS Verification Across Roles
     // -------------------------------------------------------------------------
-    console.log('\n--- 8. Testing PostgREST JWT Authentication & Security Across Roles ---');
+    console.log('\n--- 8. Testing PostgreSQL Role, JWT Context, and RLS Verification Across Roles ---');
+
+    // Scope Clarification:
+    // This test suite verifies PostgreSQL-level authorization:
+    // - Column-level grants (cost_price_toman denied for anon)
+    // - Table-level grants (warehouse_stock denied for anon)
+    // - View security (v_storefront_products granted to anon)
+    // - Row-Level Security (RLS) policies filtering warehouse_stock for unprivileged authenticated users
+    // - RPC execution authorization (rpc_record_stock_movement denied for customer, permitted for warehouse_manager)
+    //
+    // Note: Because this test connects directly to PostgreSQL via node-postgres (pg), it tests the database's
+    // internal authorization logic under simulated PostgREST GUC context (request.jwt.claims).
+    // It does NOT test the HTTP PostgREST API Gateway (header parsing, JWT cryptographic signature validation,
+    // or token expiry). PostgREST gateway tests must be run against the HTTP API endpoint.
 
     // 8.1 anon: Cannot select cost_price_toman
     const anonAuth: AuthContext = { role: 'anon' };

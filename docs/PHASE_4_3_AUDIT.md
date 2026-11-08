@@ -287,6 +287,33 @@ To avoid ambiguity between sequential in-session execution and real concurrent i
 - In `supabase` mode, `src/services/productService.ts` and `src/services/supabaseClient.ts` query `v_storefront_products`, verifying schema health without exposing internal warehouse mechanics.
 - All Vite, React 19, and Tailwind CSS v4 builds pass with zero errors.
 
+### 9.12 Pre-Staging Test Infrastructure Remediation (`scripts/verifyConcurrencyHarness.ts`)
+Prior to staging deployment, a focused audit of the automated two-connection test harness resolved three critical technical issues:
+
+1. **Secure Parameterized JWT Context & Role Allowlist Injection (Issue A):**
+   - **Vulnerability:** The harness previously injected JWT claims via raw string interpolation (`SET LOCAL "request.jwt.claims" = '${jwtClaims}';`), risking SQL injection and quoting defects.
+   - **Remediation:** Refactored `executeTx()` to use PostgreSQL's parameterized function `SELECT pg_catalog.set_config('request.jwt.claims', $1, true);`. Parameterized calls are also used for `request.jwt.claim.role`, `request.jwt.claim.sub`, and `request.jwt.claim.email`.
+   - **Role Allowlist:** Because PostgreSQL syntax does not permit parameterizing the target role in `SET ROLE $1`, an explicit compile-time/runtime allowlist (`ALLOWED_DATABASE_ROLES = new Set(['anon', 'authenticated', 'service_role'])`) strictly validates role values prior to `SET LOCAL ROLE <role>`.
+   - **Safe Rollback:** Wrapped `ROLLBACK;` inside an isolated error handler to ensure that rollback failures never mask the original query failure.
+   - **Architectural Distinction:** Documented the distinction between `SET LOCAL ROLE` (which establishes PostgreSQL session privilege identity for GRANT/REVOKE and RLS evaluation) and `set_config` (which populates transaction-local GUCs consumed by Supabase helper functions such as `auth.uid()` and `auth.role()`).
+
+2. **Robust FULL OUTER JOIN Inventory Ledger Reconciliation Invariant (Issue B):**
+   - **Vulnerability:** The previous reconciliation query used a `LEFT JOIN` starting from `warehouse_stock`. This suffered from two major flaws:
+     - *Problem 1 (Empty Result False Positive):* If the query returned zero rows (e.g., due to an erroneous filter), the `for (const r of reconRows)` loop would vacuously pass without verifying anything.
+     - *Problem 2 (Missing Ledger-Only Rows):* If ledger movements were recorded without a corresponding `warehouse_stock` row (an orphan ledger failure), `LEFT JOIN` would omit the variant entirely.
+   - **Remediation:**
+     - Rewrote reconciliation to execute a `FULL OUTER JOIN` between `warehouse_stock` projection and `stock_movements` ledger sums, parameterized with `$1::uuid` and `$2::uuid`.
+     - Added an explicit check asserting `reconRows.length >= 3` and verified the presence of all three expected test combinations:
+       * `(WH-TEST-CONCURRENCY-SRC, CNA-TEST-CONCURRENCY)` (post-inflow and post-transfer out)
+       * `(WH-TEST-CONCURRENCY-DST, CNA-TEST-CONCURRENCY)` (post-transfer in)
+       * `(WH-TEST-CONCURRENCY-SRC, CNA-TEST-CONCURRENCY-RED)` (post-inflow and post-reduction)
+     - Added explicit guards detecting orphan projection rows (`movement_count === 0`) or orphan ledger rows (`projection_stock === null`).
+     - Strictly asserted `is_reconciled === true` for every row, with detailed multi-parameter diagnostic output on any mismatch.
+
+3. **Accurate Security Test Scope & PostgREST Pipeline Distinction (Issue C):**
+   - **Clarity Issue:** Previous documentation referred to the harness security suite as "PostgREST JWT Authentication Tests". Direct PostgreSQL connections via `node-postgres` (`pg`) bypass the HTTP PostgREST API Gateway entirely. They do not validate JWT cryptographic signatures, asymmetric public keys, header encoding, or token expiration timestamps.
+   - **Remediation:** Formally retitled and scoped the suite to **"PostgreSQL Role, JWT Context, and RLS Verification"**. The suite rigorously tests internal database authorization (table privileges, column-level security, RLS row filtering, and `SECURITY DEFINER` RPC access control under simulated GUC claims). Gateway-level HTTP security is documented as requiring end-to-end HTTP tests against PostgREST.
+
 ---
 
 ## 10. Audit & Verification Status Matrix
@@ -308,9 +335,9 @@ Every requirement and technical component is classified into one of the followin
 | **Role Security Suite (`phase_4_3_security_test.sql`)** | **SQL scripts prepared but not executed** | `SET LOCAL ROLE` permission and RLS test fixture prepared |
 | **Sequential Idempotency Checks (concurrency Section C)**| **SQL scripts prepared but not executed** | Sequential single-session test prepared |
 | **Manual Two-Session Concurrency Procedures** | **Manual test procedures not yet executed** | Interactive psql dual-session procedure documented in concurrency_test.sql |
-| **Automated Two-Connection Harness (`scripts/...`)** | **Automated two-connection concurrency tests actually executed** | Harness executed; logged `NOT TESTED` due to absent database URL |
-| **SQL Tests on Live PostgreSQL Engine** | **SQL tests actually executed against PostgreSQL** | None (0) executed locally due to no local PostgreSQL daemon |
-| **Security Tests on Live PostgreSQL Engine** | **Security tests actually executed** | None (0) executed locally due to no local PostgreSQL daemon |
+| **Automated Two-Connection Concurrency & DB Security Harness (`scripts/verifyConcurrencyHarness.ts`)** | **Automated two-connection concurrency tests actually executed** | Harness executed; logged `NOT TESTED` due to absent database URL |
+| **SQL Tests on Live PostgreSQL Engine** | **SQL tests actually executed against PostgreSQL** | None (0) executed locally due to no local PostgreSQL daemon (NOT TESTED) |
+| **Security Tests on Live PostgreSQL Engine** | **Security tests actually executed** | None (0) executed locally due to no local PostgreSQL daemon (NOT TESTED) |
 | **Multi-Warehouse Production Topology (WH-02+)** | **Deferred** | Phase 4.3 seeds `WH-CENTRAL`; regional warehouses deferred to Phase 4.4 |
 | **Orders, Checkout & Payments Tables** | **Deferred** | Formally documented in Phase 4.2; implementation deferred to Phase 4.4+ |
 
